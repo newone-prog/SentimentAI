@@ -24,8 +24,6 @@ import './App.css';
 gsap.registerPlugin(ScrollTrigger);
 
 import { fetchStockData, fetchNewsAndSentiment, type StockData, type NewsItem, type SentimentAnalysis } from './lib/api';
-import { generateNewsletterHTML } from './lib/emailTemplate';
-import { supabase } from './lib/supabaseClient';
 
 // Mock Data for Demo
 const mockStockData: Record<string, StockData> = {
@@ -792,87 +790,27 @@ const FeaturesSection = () => {
 };
 
 // Big Animated SaaS Footer
-const Footer = ({ stockData, sentimentStats }: { stockData: StockData | null, sentimentStats: SentimentAnalysis | null }) => {
+const Footer = () => {
   const footerRef = useRef<HTMLDivElement>(null);
   const marqueeRef = useRef<HTMLDivElement>(null);
 
-  const [email, setEmail] = useState('');
-  const [isSubscribing, setIsSubscribing] = useState(false);
-  const [subscribeStatus, setSubscribeStatus] = useState<'idle' | 'success' | 'error'>('idle');
-
-  const handleSubscribe = async () => {
-    if (!email || !email.includes('@') || !stockData || !sentimentStats) return;
-
-    setIsSubscribing(true);
-    setSubscribeStatus('idle');
-
-    try {
-      // 1. Compute AI Verdict dynamically for the snapshot context
-      const { analyzeStock } = await import('./brain/ensembleModel');
-      const result = await analyzeStock(stockData, sentimentStats);
-
-      // 2. Generate HTML Newsletter payload string from our beautifully styled template
-      const htmlContent = generateNewsletterHTML(
-        email,
-        stockData,
-        sentimentStats.analyzedData,
-        result.verdict,
-        result.verdictClass
-      );
-
-      // 3. Detect if the user has plugged their Supabase keys into the environment variables
-      if (supabase) {
-        // We have a live database! Push the data to the Supabase Backend immediately.
-        const { error: dbError } = await supabase
-          .from('newsletter_subscriptions')
-          .insert([{
-            email: email,
-            stock_name: stockData.name,
-            html_payload: htmlContent,
-            status: 'pending' // Ready for an Edge Function to scoop and deliver!
-          }]);
-
-        if (dbError) {
-          console.error("Supabase Insertion Error:", dbError);
-          throw new Error("Failed to subscribe via Supabase");
-        }
-      } else {
-        // Supabase keys are missing. Fallback to local HTML download for instant previewing.
-        console.warn("Supabase API keys not found in .env.local. Falling back to local HTML preview download.");
-
-        const blob = new Blob([htmlContent], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `SentimentAI_Newsletter_${stockData.name.replace(/\s+/g, '_')}.html`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }
-
-      setSubscribeStatus('success');
-      setEmail('');
-
-      // Reset button after 3 seconds
-      setTimeout(() => setSubscribeStatus('idle'), 3000);
-    } catch (error) {
-      console.error("Newsletter generation failed:", error);
-      setSubscribeStatus('error');
-    } finally {
-      setIsSubscribing(false);
-    }
-  };
-
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
-      // Footer entrance
-      gsap.fromTo(footerRef.current,
-        { opacity: 0, y: 50 },
+      // Marquee animation
+      gsap.to(marqueeRef.current, {
+        x: '-50%',
+        duration: 30,
+        repeat: -1,
+        ease: 'none',
+      });
+
+      // Footer content reveal
+      gsap.fromTo('.footer-content',
+        { y: 40, opacity: 0 },
         {
-          opacity: 1,
           y: 0,
-          duration: 1.5,
+          opacity: 1,
+          duration: 0.8,
           ease: 'power3.out',
           scrollTrigger: {
             trigger: footerRef.current,
@@ -880,23 +818,15 @@ const Footer = ({ stockData, sentimentStats }: { stockData: StockData | null, se
           },
         }
       );
-
-      // Endless marquee
-      gsap.to(marqueeRef.current, {
-        xPercent: -50,
-        repeat: -1,
-        duration: 20,
-        ease: 'linear',
-      });
     }, footerRef);
 
     return () => ctx.revert();
   }, []);
 
   const footerLinks = {
-    Company: ['About', 'Careers', 'Founders', 'Contact'],
-    Product: ['Features', 'Pricing', 'API', 'Documentation'],
-    Resources: ['Blog', 'Research', 'Case Studies', 'Help Center'],
+    Product: ['Features', 'Pricing', 'API', 'Integrations'],
+    Company: ['About', 'Blog', 'Careers', 'Press'],
+    Resources: ['Documentation', 'Help Center', 'Community', 'Contact'],
     Legal: ['Privacy', 'Terms', 'Security', 'Cookies'],
   };
 
@@ -967,25 +897,11 @@ const Footer = ({ stockData, sentimentStats }: { stockData: StockData | null, se
             <div className="flex gap-3 w-full md:w-auto">
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                className="bg-white/10 border border-white/20 rounded-full px-6 py-3 text-white placeholder:text-white/40 focus:outline-none focus:border-[#C4A77D] transition-colors flex-1 md:w-64 disabled:opacity-50"
-                disabled={isSubscribing}
-                onKeyDown={(e) => e.key === 'Enter' && handleSubscribe()}
+                className="bg-white/10 border border-white/20 rounded-full px-6 py-3 text-white placeholder:text-white/40 focus:outline-none focus:border-[#C4A77D] transition-colors flex-1 md:w-64"
               />
-              <button
-                onClick={handleSubscribe}
-                disabled={isSubscribing || !email}
-                className="bg-[#C4A77D] text-[#0A0A0A] px-6 py-3 rounded-full font-medium hover:bg-[#D4C4A8] transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-32 flex justify-center items-center"
-              >
-                {isSubscribing ? (
-                  <div className="w-5 h-5 border-2 border-[#0A0A0A] border-t-transparent rounded-full animate-spin" />
-                ) : subscribeStatus === 'success' ? (
-                  'Subscribed!'
-                ) : (
-                  'Subscribe'
-                )}
+              <button className="bg-[#C4A77D] text-[#0A0A0A] px-6 py-3 rounded-full font-medium hover:bg-[#D4C4A8] transition-colors">
+                Subscribe
               </button>
             </div>
           </div>
@@ -1112,7 +1028,7 @@ function App() {
         )}
         <FeaturesSection />
       </main>
-      <Footer stockData={stockData} sentimentStats={sentimentStats} />
+      <Footer />
     </div>
   );
 }
