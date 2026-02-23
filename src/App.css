@@ -1,0 +1,312 @@
+/* App-specific styles */
+
+/* Smooth transitions for all interactive elements */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hero section enhancements */
+.hero-title {
+  background: linear-gradient(180deg, #0A0A0A 0%, #3A3A3A 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.hero-title .italic {
+  -webkit-text-fill-color: #C4A77D;
+  background: none;
+}
+
+/* Input focus states */
+.input-elegant {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.input-elegant:focus {
+  box-shadow: 0 4px 16px rgba(196, 167, 125, 0.15);
+}
+
+/* Button hover effects */
+.cta-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.cta-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s ease;
+}
+
+.cta-button:hover::before {
+  left: 100%;
+}
+
+/* Chart animations */
+@keyframes chartDraw {
+  from {
+    stroke-dashoffset: 1000;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.chart-box svg path[stroke] {
+  stroke-dasharray: 1000;
+  animation: chartDraw 2s ease-out forwards;
+}
+
+/* News item hover */
+.news-item {
+  position: relative;
+}
+
+.news-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #C4A77D;
+  transform: scaleY(0);
+  transition: transform 0.3s ease;
+}
+
+.news-item:hover::before {
+  transform: scaleY(1);
+}
+
+/* Feature card hover */
+.feature-card {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+}
+
+.feature-card:hover .w-12 {
+  transform: scale(1.05);
+}
+
+/* Metric card animations */
+.metric-card {
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  border-left-color: #C4A77D;
+}
+
+/* Verdict glow effect */
+.verdict-bullish {
+  animation: glowBullish 3s ease-in-out infinite;
+}
+
+@keyframes glowBullish {
+
+  0%,
+  100% {
+    text-shadow: 0 0 40px rgba(22, 163, 74, 0.3);
+  }
+
+  50% {
+    text-shadow: 0 0 80px rgba(22, 163, 74, 0.5);
+  }
+}
+
+.verdict-bearish {
+  animation: glowBearish 3s ease-in-out infinite;
+}
+
+@keyframes glowBearish {
+
+  0%,
+  100% {
+    text-shadow: 0 0 40px rgba(220, 38, 38, 0.3);
+  }
+
+  50% {
+    text-shadow: 0 0 80px rgba(220, 38, 38, 0.5);
+  }
+}
+
+/* Navigation blur effect */
+.nav-scrolled {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+}
+
+/* Badge animations */
+.news-badge {
+  transition: all 0.3s ease;
+}
+
+.news-item:hover .news-badge {
+  transform: scale(1.05);
+}
+
+/* Popular ticker buttons */
+button[class*="rounded-full"] {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+button[class*="rounded-full"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Sentiment stat cards */
+.bg-white.rounded-2xl {
+  transition: all 0.3s ease;
+}
+
+.bg-white.rounded-2xl:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* Footer link hover */
+.footer-link {
+  position: relative;
+}
+
+.footer-link::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+
+.footer-link:hover::after {
+  width: 100%;
+}
+
+/* Social icon hover */
+.footer-saas .w-10 {
+  transition: all 0.3s ease;
+}
+
+.footer-saas .w-10:hover {
+  transform: translateY(-2px);
+}
+
+/* Newsletter input */
+.footer-saas input[type="email"] {
+  transition: all 0.3s ease;
+}
+
+.footer-saas input[type="email"]:focus {
+  box-shadow: 0 0 0 3px rgba(196, 167, 125, 0.2);
+}
+
+/* Animated background circles */
+.animated-circle {
+  will-change: transform;
+}
+
+/* Loading spinner */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Pulse animation for live indicator */
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Section transitions */
+.section-flowing {
+  will-change: transform;
+}
+
+/* Chart container */
+.chart-container {
+  transition: all 0.3s ease;
+}
+
+.chart-container:hover {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+}
+
+/* Verdict stats cards */
+.verdict-content .bg-white\\/5 {
+  transition: all 0.3s ease;
+}
+
+.verdict-content .bg-white\\/5:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(196, 167, 125, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: clamp(2.5rem, 10vw, 4rem);
+  }
+
+  .verdict-word {
+    font-size: clamp(3rem, 12vw, 5rem);
+  }
+
+  .metric-value {
+    font-size: clamp(2rem, 6vw, 3rem);
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print styles */
+@media print {
+
+  .nav-fixed,
+  .grain-overlay,
+  .animated-bg {
+    display: none !important;
+  }
+
+  .section-pinned,
+  .section-flowing {
+    height: auto !important;
+    page-break-inside: avoid;
+  }
+}
