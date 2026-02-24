@@ -23,7 +23,7 @@ import './App.css';
 
 gsap.registerPlugin(ScrollTrigger);
 
-import { fetchStockData, fetchNewsAndSentiment, type StockData, type NewsItem, type SentimentAnalysis } from './lib/api';
+import { fetchStockData, fetchNewsAndSentiment, getProxyUrl, type StockData, type NewsItem, type SentimentAnalysis } from './lib/api';
 
 // Mock Data for Demo
 const mockStockData: Record<string, StockData> = {
@@ -217,10 +217,18 @@ const SearchSection = ({ onSearch }: { onSearch: (ticker: string) => void }) => 
     // 1. Primary AI Intelligence: Native Indian Market Search
     try {
       const growwUrl = `https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=${encodeURIComponent(query)}&size=5&web=true`;
-      const proxyGroww = `https://api.allorigins.win/raw?url=${encodeURIComponent(growwUrl)}`;
+      const proxyGroww = getProxyUrl(growwUrl, 'groww');
 
       const res = await fetch(proxyGroww);
-      const data = await res.json();
+      let data: any = {};
+
+      if (import.meta.env.DEV) {
+        data = await res.json();
+      } else {
+        const wrapperData = await res.json();
+        if (wrapperData?.contents) data = JSON.parse(wrapperData.contents);
+      }
+
       const content = data?.data?.content || [];
 
       // Look for the first actual equity stock in the Indian Market results
@@ -236,10 +244,18 @@ const SearchSection = ({ onSearch }: { onSearch: (ticker: string) => void }) => 
     // 2. Global Fallback Intelligence (Yahoo Finance)
     try {
       const rawUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=7&newsCount=0`;
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(rawUrl)}`;
+      const proxyUrl = getProxyUrl(rawUrl, 'yahoo2');
 
       const response = await fetch(proxyUrl, { headers: { 'Accept': 'application/json' } });
-      const data = await response.json();
+      let data: any = {};
+
+      if (import.meta.env.DEV) {
+        data = await response.json();
+      } else {
+        const wrapperData = await response.json();
+        if (wrapperData?.contents) data = JSON.parse(wrapperData.contents);
+      }
+
       const quotes = data.quotes || [];
 
       if (quotes.length > 0) {
