@@ -185,7 +185,7 @@ const PriceActionSection = ({ stockData }: { stockData: StockData | null }) => {
   const minPrice = Math.min(...chartPoints);
   const maxPrice = Math.max(...chartPoints);
   const range = maxPrice - minPrice || 1;
-  const svgPath = chartPoints.map((price, i) => `${i === 0 ? 'M' : 'L'} ${(i / (chartPoints.length - 1)) * 100} ${100 - ((price - minPrice) / range) * 80 - 10}`).join(' ');
+  const svgPath = chartPoints.map((price, i) => `${i === 0 ? 'M' : 'L'} ${(i / Math.max(chartPoints.length - 1, 1)) * 100} ${100 - ((price - minPrice) / range) * 80 - 10}`).join(' ');
   const areaPath = `${svgPath} L 100 100 L 0 100 Z`;
 
   return (
@@ -326,10 +326,10 @@ const ResearchDialog = ({ isOpen, onClose, researchPaper, stockName, source }: {
   if (!isOpen) return null;
 
   const renderPaper = (text: string) => {
-    const sections = text.split(/===\s*/);
-    return sections.filter(Boolean).map((section, i) => {
+    const sections = text.split(/={3}\s*/);
+    return sections.filter(s => s.trim()).map((section, i) => {
       const lines = section.trim().split('\n');
-      const title = lines[0].replace(/\s*===\s*/g, '').trim();
+      const title = lines[0].replace(/\s*={1,2}\s*/g, '').trim();
       const body = lines.slice(1).join('\n').trim();
       if (!title && !body) return null;
       return (<div key={i} className="research-section mb-6">{title && <h3 className="research-section-title">{title}</h3>}{body && body.split('\n').filter(Boolean).map((p, j) => (<p key={j} className="research-paragraph">{p.trim()}</p>))}</div>);
@@ -379,13 +379,24 @@ const FinalVerdictSection = ({ stockName, sentimentStats, stockData }: { stockNa
 
   useEffect(() => {
     let mounted = true;
+    const controller = new AbortController();
+
     const computeAI = async () => {
       setIsProcessing(true);
       if (stockData) {
-        const { analyzeStock } = await import('./brain/ensembleModel');
-        const { getDeepAnalysis } = await import('./lib/llmService');
-        const [ensembleResult, deepResult] = await Promise.all([analyzeStock(stockData, sentimentStats), getDeepAnalysis(stockName, stockData, sentimentStats)]);
-        if (mounted) {
+        try {
+          const { analyzeStock } = await import('./brain/ensembleModel');
+          const { getDeepAnalysis } = await import('./lib/llmService');
+          const [ensembleSettled, deepSettled] = await Promise.allSettled([
+            analyzeStock(stockData, sentimentStats),
+            getDeepAnalysis(stockName, stockData, sentimentStats, controller.signal)
+          ]);
+          
+          if (!mounted) return;
+
+          const ensembleResult = ensembleSettled.status === 'fulfilled' ? ensembleSettled.value : { verdict: 'NEUTRAL' as const, verdictClass: 'verdict-neutral' as const, finalScore: 0, confidence: 0 };
+          const deepResult = deepSettled.status === 'fulfilled' ? deepSettled.value : { reasoning: 'LLM analysis unavailable', verdict: 'NEUTRAL' as const, confidence: 0, source: 'Local Baseline Engine', emotionalContext: 'Disconnected', researchPaper: '', disclaimer: 'AI-generated analysis. Not financial advice.' };
+          
           const llmIsFallback = deepResult.confidence <= 0 || deepResult.source === 'Local Baseline Engine';
           let verdict: "BULLISH" | "BEARISH" | "NEUTRAL";
           let vClass: "verdict-bullish" | "verdict-bearish" | "verdict-neutral";
@@ -393,14 +404,23 @@ const FinalVerdictSection = ({ stockName, sentimentStats, stockData }: { stockNa
           else if (deepResult.verdict === ensembleResult.verdict) { verdict = deepResult.verdict; vClass = `verdict-${verdict.toLowerCase()}` as any; }
           else if (ensembleResult.finalScore > 0.15 || ensembleResult.finalScore < -0.15) { verdict = ensembleResult.verdict; vClass = ensembleResult.verdictClass; }
           else { verdict = deepResult.verdict; vClass = `verdict-${verdict.toLowerCase()}` as any; }
+          
           setAiVerdict(verdict); setVerdictClass(vClass);
-          setLlmAnalysis({ reasoning: deepResult.reasoning, source: deepResult.source, confidence: deepResult.confidence, emotionalContext: deepResult.emotionalContext, disclaimer: (deepResult as any).disclaimer, researchPaper: deepResult.researchPaper });
-          setIsProcessing(false);
+          setLlmAnalysis({ reasoning: deepResult.reasoning, source: deepResult.source, confidence: Math.max(0, Math.min(100, deepResult.confidence)), emotionalContext: deepResult.emotionalContext, disclaimer: (deepResult as any).disclaimer, researchPaper: deepResult.researchPaper });
+        } catch (error) {
+          console.error('[App] computeAI error:', error);
+        } finally {
+          if (mounted) setIsProcessing(false);
         }
-      } else { setIsProcessing(false); }
+      } else { 
+        if (mounted) setIsProcessing(false); 
+      }
     };
     computeAI();
-    return () => { mounted = false; };
+    return () => { 
+      mounted = false; 
+      controller.abort();
+    };
   }, [stockData, sentimentStats, stockName]);
 
   const confidence = llmAnalysis?.confidence || 50;
@@ -528,12 +548,17 @@ function App() {
         return;
       }
 
-      const fallbackName = mockStockData[selectedTicker]?.name || selectedTicker.split('.')[0];
-      const sData = await fetchStockData(selectedTicker, fallbackName);
-      setStockData(sData);
-      const nData = await fetchNewsAndSentiment(selectedTicker, sData?.name);
-      setSentimentStats(nData);
-      setIsDataLoading(false);
+      try {
+        const fallbackName = mockStockData[selectedTicker]?.name || selectedTicker.split('.')[0];
+        const sData = await fetchStockData(selectedTicker, fallbackName);
+        setStockData(sData);
+        const nData = await fetchNewsAndSentiment(selectedTicker, sData?.name);
+        setSentimentStats(nData);
+      } catch (error) {
+        console.error('[App] loadData failed:', error);
+      } finally {
+        setIsDataLoading(false);
+      }
     };
 
     if (!authLoading) loadData();

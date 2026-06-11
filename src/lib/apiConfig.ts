@@ -27,5 +27,5 @@ export const isProduction = import.meta.env.PROD;
 // In dev mode Vite proxy handles routing.
 // In prod the deployed backend (Firebase Functions / Cloud Run) handles /api/* and /llm/* routes.
 export const hasBackendProxy = isProduction
-  ? true // Backend is always present in production
-  : true; // Dev proxy is also present via vite.config.ts
+  ? Boolean(import.meta.env.VITE_BACKEND_URL)
+  : true;

@@ -91,10 +91,10 @@ export const Navigation: React.FC<NavigationProps> = ({
                     <span className="nav-user-dropdown-email">{user.email}</span>
                   </div>
                   <div className="nav-user-dropdown-divider" />
-                  <button className="nav-user-dropdown-item" onClick={() => { logout(); setShowUserMenu(false); }}>
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
+                   <button className="nav-user-dropdown-item" onClick={async () => { await logout(); setShowUserMenu(false); }}>
+                     <LogOut className="w-4 h-4" />
+                     Sign Out
+                   </button>
                 </div>
               )}
             </div>
@@ -122,10 +122,10 @@ export const Navigation: React.FC<NavigationProps> = ({
                     <span className="nav-user-dropdown-email">{user.email}</span>
                   </div>
                   <div className="nav-user-dropdown-divider" />
-                  <button className="nav-user-dropdown-item" onClick={() => { logout(); setShowUserMenu(false); }}>
-                    <LogOut className="w-4 h-4" />
-                    Sign Out
-                  </button>
+                   <button className="nav-user-dropdown-item" onClick={async () => { await logout(); setShowUserMenu(false); }}>
+                     <LogOut className="w-4 h-4" />
+                     Sign Out
+                   </button>
                 </div>
               )}
             </div>

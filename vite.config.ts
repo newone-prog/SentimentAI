@@ -42,6 +42,11 @@ export default defineConfig(({ mode }) => {
     changeOrigin: true,
     rewrite: (path) => path.replace(/^\/api\/groww/, '')
   },
+  '/api/gnews': {
+    target: 'https://gnews.io',
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/api\/gnews/, '/api')
+  },
   '/api/mediastack': {
     target: 'https://api.mediastack.com',
     changeOrigin: true,
@@ -72,9 +77,9 @@ export default defineConfig(({ mode }) => {
     },
   },
   '/llm/nvidia': {
-    target: 'https://integrate.api.nvidia.com/v1/chat/completions',
+    target: 'https://integrate.api.nvidia.com',
     changeOrigin: true,
-    rewrite: (_path) => '',
+    rewrite: (path) => path.replace(/^\/llm\/nvidia/, '/v1/chat/completions'),
     secure: false
   },
   '/llm/openrouter': {
