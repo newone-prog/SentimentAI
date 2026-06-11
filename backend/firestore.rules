@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection - users can only read/write their own data
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Companies collection - public read, admin write only (via Cloud Functions)
+    match /companies/{companyId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Analyses collection - public read (cached AI reports), admin write
+    match /analyses/{analysisId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // Watchlists collection - users can only access their own
+    match /watchlists/{watchlistId} {
+      allow read: if request.auth != null && request.auth.uid == watchlistId;
+      allow write: if request.auth != null && request.auth.uid == watchlistId;
+    }
+
+    // Search history - users can only read their own, Cloud Functions write
+    match /searchHistory/{historyId} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
+      allow delete, update: if false;
+    }
+
+    // News cache - public read, admin write only
+    match /newsCache/{cacheId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}

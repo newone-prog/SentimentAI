@@ -1,0 +1,28 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "searchHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "searchedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "savedReports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "uid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "companies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "companyNameLower", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

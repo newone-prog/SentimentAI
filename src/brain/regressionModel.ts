@@ -1,34 +1,38 @@
 import type { StockData } from '../lib/api';
 
-/**
- * Momentum Score (-1 to 1)
- * Calculates the short-term directional strength using recent price changes bounded by hyperbolic tangent.
- */
 export const calculateMomentumScore = (stockData: StockData): number => {
-    // Basic short term percentage direction map
-    // E.g. A stock up 5% today has massive momentum, a stock down 2% has negative momentum
-    const factor = stockData.changePercent / 3; // Normalize roughly (say +/- 3% is extreme)
-
-    // S-curve bounding so even +50% drops don't exceed -1 math constraints
-    return Math.max(-1, Math.min(1, Math.tanh(factor)));
+  const factor = stockData.changePercent / 3;
+  return Math.max(-1, Math.min(1, Math.tanh(factor)));
 };
 
-/**
- * Volume Score (-1 to 1) 
- * Estimates trade volume participation weight. If volume is high, strength is validated.
- * Note: Since the base Yahoo Chart API returned in api.ts doesn't fetch real volume arrays directly without an extra lookup, 
- * we use the relative price deviation magnitude as a simulated proxy for volume volatility strength.
- */
 export const calculateVolumeScore = (stockData: StockData): number => {
-    // Simulated proxy: Larger price swings (either direction) indicate high participation volume 
-    // If the price change percent is very low (0.1%), volume score is near 0 (neutral participation).
-    // Bounded natively to the + side (since strong volume validates the existing trend direction).
+  if (stockData.volume && stockData.volume.length >= 3 && stockData.avgVolume > 0) {
+    const recentVolumes = stockData.volume.slice(-3);
+    const recentAvg = recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length;
+    const volumeRatio = recentAvg / stockData.avgVolume;
 
-    const absoluteDeviation = Math.abs(stockData.changePercent);
-    const volumeProxy = Math.tanh(absoluteDeviation / 2); // 0 to +1 
-
-    // We make volume score sign match the momentum sign (direction validation)
+    const volumeIntensity = Math.tanh((volumeRatio - 1) * 2);
     const sign = stockData.change >= 0 ? 1 : -1;
 
-    return sign * volumeProxy;
+    return Math.max(-1, Math.min(1, sign * volumeIntensity));
+  }
+
+  if (stockData.volume && stockData.volume.length > 0) {
+    const volumes = stockData.volume;
+    const latestVolume = volumes[volumes.length - 1];
+    const olderVolume = volumes.length > 3
+      ? volumes.slice(0, -3).reduce((a, b) => a + b, 0) / (volumes.length - 3)
+      : latestVolume;
+
+    if (olderVolume === 0) return 0;
+    const volumeRatio = latestVolume / olderVolume;
+    const volumeIntensity = Math.tanh((volumeRatio - 1) * 2);
+    const sign = stockData.change >= 0 ? 1 : -1;
+    return Math.max(-1, Math.min(1, sign * volumeIntensity));
+  }
+
+  const absoluteDeviation = Math.abs(stockData.changePercent);
+  const volumeProxy = Math.tanh(absoluteDeviation / 2) * 0.5;
+  const sign = stockData.change >= 0 ? 1 : -1;
+  return sign * volumeProxy;
 };

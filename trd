@@ -1,0 +1,800 @@
+# TRD — Project Athena
+
+Version: 1.0
+
+Status: Phase 1
+
+Project Type:
+AI-Powered Investment Intelligence Platform
+
+---
+
+# Technical Vision
+
+Athena is an AI-native investment research platform designed for Indian retail investors.
+
+Unlike traditional stock screeners, Athena combines:
+
+* Market Data
+* Financial Data
+* News Intelligence
+* Technical Analysis
+* AI Reasoning
+
+into a single research experience.
+
+System must be:
+
+* Fast
+* SEO Friendly
+* Mobile First
+* AI Native
+* Scalable
+* Serverless
+
+---
+
+# Architecture Overview
+
+Frontend Layer
+
+Astro 5
+
+TypeScript
+
+Tailwind CSS 4
+
+ShadCN UI
+
+Motion
+
+PWA Support
+
+↓
+
+API Layer
+
+Server Endpoints
+
+Firebase Cloud Functions
+
+↓
+
+Data Layer
+
+Firestore
+
+↓
+
+External Services
+
+Yahoo Finance
+
+OpenRouter
+
+News Providers
+
+---
+
+# Technology Stack
+
+Frontend
+
+* Astro 5
+* TypeScript
+* Tailwind CSS 4
+* ShadCN UI
+* Motion
+* Zod
+* TanStack Query
+* Astro Content Collections
+
+Backend
+
+* Firebase Functions v2
+* Node.js 22
+
+Database
+
+* Firestore
+
+Authentication
+
+* Firebase Auth
+
+Deployment
+
+* Vercel
+
+Analytics
+
+* Vercel Analytics
+* PostHog
+
+Monitoring
+
+* Sentry
+
+AI
+
+* OpenRouter
+
+Future AI Providers
+
+* NVIDIA NIM
+* Gemini
+* Claude
+* OpenAI
+
+---
+
+# Frontend Architecture
+
+src/
+
+components/
+
+ui/
+
+research/
+
+dashboard/
+
+news/
+
+chat/
+
+layout/
+
+pages/
+
+services/
+
+hooks/
+
+stores/
+
+lib/
+
+types/
+
+utils/
+
+styles/
+
+content/
+
+public/
+
+---
+
+# Routing Structure
+
+/
+
+Landing Page
+
+/search
+
+Search Interface
+
+/company/[slug]
+
+Research Page
+
+/chat
+
+AI Research Chat
+
+/login
+
+Authentication
+
+/dashboard
+
+User Dashboard
+
+/profile
+
+User Profile
+
+/watchlist
+
+Watchlist
+
+---
+
+# SEO Strategy
+
+Priority: Extremely High
+
+Every company page must be indexable.
+
+Example:
+
+/company/reliance-industries
+
+/company/tata-motors
+
+/company/hdfc-bank
+
+/company/infosys
+
+Benefits:
+
+Google indexing
+
+Organic traffic
+
+Long-tail search traffic
+
+---
+
+# Dynamic Metadata
+
+Generate:
+
+Title
+
+Meta Description
+
+Open Graph
+
+Twitter Cards
+
+JSON-LD
+
+Example:
+
+Reliance Industries Analysis | Athena
+
+AI-powered research, news intelligence, technical analysis and outlook for Reliance Industries.
+
+---
+
+# Structured Data
+
+Use Schema.org
+
+Types:
+
+Organization
+
+Article
+
+FAQ
+
+WebApplication
+
+FinancialService
+
+BreadcrumbList
+
+---
+
+# Sitemap
+
+Generate automatically
+
+Includes:
+
+Company Pages
+
+News Pages
+
+Static Pages
+
+---
+
+# Robots
+
+Optimized for indexing.
+
+Allow:
+
+Company research pages
+
+News pages
+
+Insights pages
+
+Block:
+
+Private dashboard routes
+
+Auth routes
+
+Internal APIs
+
+---
+
+# Performance Requirements
+
+Lighthouse
+
+Performance: 95+
+
+SEO: 100
+
+Accessibility: 95+
+
+Best Practices: 100
+
+---
+
+# Core Web Vitals
+
+LCP < 2.5 seconds
+
+CLS < 0.1
+
+INP < 200ms
+
+---
+
+# Caching Strategy
+
+Market Data
+
+5 minutes
+
+News
+
+15 minutes
+
+AI Analysis
+
+6 hours
+
+Company Information
+
+24 hours
+
+Static Assets
+
+1 year
+
+---
+
+# Search System
+
+Search by:
+
+Company Name
+
+Ticker
+
+Sector
+
+Autocomplete
+
+Fuzzy Search
+
+Instant Results
+
+Future:
+
+Natural Language Search
+
+Example:
+
+Banks with high growth
+
+Auto companies with low PE
+
+---
+
+# AI Analysis Pipeline
+
+User Query
+
+↓
+
+Fetch Market Data
+
+↓
+
+Fetch Financial Data
+
+↓
+
+Fetch News
+
+↓
+
+Calculate Indicators
+
+↓
+
+Build Context
+
+↓
+
+OpenRouter
+
+↓
+
+JSON Output
+
+↓
+
+Render Research
+
+---
+
+# AI Output Contract
+
+{
+"company": "",
+"outlook": "",
+"confidence": 0,
+"summary": "",
+"bullishFactors": [],
+"bearishFactors": [],
+"risks": [],
+"opportunities": [],
+"shortTerm": "",
+"longTerm": ""
+}
+
+---
+
+# News Intelligence System
+
+Sources
+
+Economic Times
+
+Moneycontrol
+
+Mint
+
+Business Standard
+
+Aggregation Layer
+
+↓
+
+Deduplication
+
+↓
+
+Relevance Scoring
+
+↓
+
+AI Summarization
+
+↓
+
+Display
+
+---
+
+# Technical Analysis Engine
+
+Indicators
+
+RSI
+
+MACD
+
+EMA 20
+
+EMA 50
+
+EMA 200
+
+SMA
+
+Volume Analysis
+
+Support
+
+Resistance
+
+Trend Strength
+
+Volatility
+
+Future
+
+Bollinger Bands
+
+VWAP
+
+ATR
+
+---
+
+# Fundamental Analysis Engine
+
+Metrics
+
+Market Cap
+
+PE
+
+PB
+
+ROE
+
+ROCE
+
+EPS
+
+Revenue Growth
+
+Profit Growth
+
+Debt To Equity
+
+Cash Flow
+
+Dividend Yield
+
+---
+
+# Authentication
+
+Firebase Auth
+
+Methods
+
+Google
+
+Email Password
+
+Future
+
+OTP
+
+Passkeys
+
+---
+
+# Firestore Collections
+
+users
+
+watchlists
+
+searchHistory
+
+analyses
+
+companies
+
+newsCache
+
+userPreferences
+
+---
+
+# User Document
+
+{
+uid,
+email,
+displayName,
+photoURL,
+createdAt,
+lastActive
+}
+
+---
+
+# Analysis Document
+
+{
+company,
+generatedAt,
+sentiment,
+confidence,
+summary,
+factors,
+risks,
+outlook
+}
+
+---
+
+# Security Requirements
+
+Never expose:
+
+OPENROUTER_API_KEY
+
+NEWS_API_KEY
+
+FIREBASE_ADMIN_KEYS
+
+All AI calls must happen server side.
+
+No direct provider access from frontend.
+
+---
+
+# Rate Limiting
+
+Anonymous
+
+10 analyses/day
+
+Authenticated
+
+100 analyses/day
+
+Premium
+
+Unlimited
+
+Future
+
+---
+
+# Error Handling
+
+Graceful Fallbacks
+
+If AI fails:
+
+Display data-driven report
+
+If News fails:
+
+Display cached news
+
+If API fails:
+
+Serve cached analysis
+
+---
+
+# Logging
+
+Track
+
+Searches
+
+AI Calls
+
+Response Time
+
+Errors
+
+User Actions
+
+---
+
+# Monitoring
+
+Sentry
+
+Error Tracking
+
+Performance Tracking
+
+AI Failure Tracking
+
+---
+
+# Analytics
+
+PostHog
+
+Track
+
+Most searched stocks
+
+Most used prompts
+
+Retention
+
+User journeys
+
+---
+
+# CI/CD
+
+GitHub
+
+↓
+
+Vercel Preview
+
+↓
+
+Automated Tests
+
+↓
+
+Production
+
+---
+
+# Testing
+
+Unit Tests
+
+Vitest
+
+Component Tests
+
+Playwright
+
+E2E Tests
+
+Playwright
+
+---
+
+# Accessibility
+
+WCAG AA
+
+Keyboard Navigation
+
+Screen Reader Support
+
+Color Contrast Compliance
+
+---
+
+# Progressive Web App
+
+Installable
+
+Offline Shell
+
+Push Notifications (Future)
+
+---
+
+# Future Expansion Layer
+
+Mutual Funds
+
+ETF Research
+
+Commodity Intelligence
+
+F&O Intelligence
+
+Portfolio Doctor
+
+Opportunity Radar
+
+Athena Copilot
+
+Market Briefings
+
+Agentic Research Workflows
+
+Multi-Agent Investment Committee
+
+---
+
+# Definition of Done
+
+Phase 1 Complete When:
+
+✓ User can search any Indian listed company
+
+✓ AI generates structured research
+
+✓ News intelligence works
+
+✓ Technical analysis works
+
+✓ Fundamental analysis works
+
+✓ SEO optimized company pages exist
+
+✓ Lighthouse >95
+
+✓ Mobile responsive
+
+✓ Secure backend implemented
+
+✓ Production deployment successful

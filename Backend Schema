@@ -1,0 +1,741 @@
+# SentimentAI — BACKEND TECHNICAL SCHEMA (PHASE 1)
+
+## Overview
+
+SentimentAI is an AI-powered investment intelligence platform focused initially on the Indian stock market (NSE & BSE).
+
+The backend is designed around a simple principle:
+
+**Fetch → Analyze → Cache → Serve**
+
+Instead of generating AI analysis for every request, Athena intelligently caches market data, news, and AI-generated research to reduce API costs and improve response times.
+
+---
+
+# Backend Architecture
+
+```text
+Frontend (Astro 5)
+        │
+        ▼
+Firebase Authentication
+        │
+        ▼
+Firebase Cloud Functions
+        │
+        ├── Search Service
+        ├── Market Data Service
+        ├── News Intelligence Service
+        ├── AI Analysis Service
+        ├── Cache Service
+        └── User Service
+        │
+        ▼
+Firestore Database
+        │
+        ▼
+External Providers
+
+├── Yahoo Finance
+├── NSE Data Sources
+├── News Providers
+├── OpenRouter
+└── Future AI Providers
+```
+
+---
+
+# Core Backend Philosophy
+
+SentimentAI should never:
+
+* Generate unnecessary AI calls
+* Re-fetch the same news repeatedly
+* Re-analyze the same company every request
+
+SentimentAI should:
+
+* Cache aggressively
+* Reuse intelligence
+* Refresh intelligently
+* Reduce API costs
+
+---
+
+# Firestore Database Schema
+
+## Collection: users
+
+Purpose:
+
+Store user information and account metadata.
+
+Document ID:
+
+uid
+
+Schema:
+
+```json
+{
+  "uid": "user_123",
+  "email": "user@example.com",
+  "displayName": "Dev",
+  "photoURL": "",
+  "createdAt": "timestamp",
+  "lastLogin": "timestamp",
+  "plan": "free",
+  "analysisCount": 0,
+  "watchlistCount": 0
+}
+```
+
+---
+
+## Collection: companies
+
+Purpose:
+
+Master database of all Indian listed companies.
+
+Document ID:
+
+Stock Symbol
+
+Example:
+
+RELIANCE
+
+TCS
+
+INFY
+
+HDFCBANK
+
+Schema:
+
+```json
+{
+  "symbol": "RELIANCE",
+  "companyName": "Reliance Industries Ltd",
+  "exchange": "NSE",
+  "sector": "Oil & Gas",
+  "industry": "Refining & Marketing",
+  "marketCap": 1950000000000,
+  "isActive": true,
+  "lastUpdated": "timestamp"
+}
+```
+
+Uses:
+
+* Company Search
+* Autocomplete
+* Company Routing
+* AI Context Building
+
+---
+
+## Collection: analyses
+
+Purpose:
+
+Store generated AI research reports.
+
+Most important collection in the system.
+
+Document ID:
+
+RELIANCE_latest
+
+or
+
+RELIANCE_YYYY_MM_DD
+
+Schema:
+
+```json
+{
+  "symbol": "RELIANCE",
+  "company": "Reliance Industries Ltd",
+
+  "generatedAt": "timestamp",
+  "expiresAt": "timestamp",
+
+  "outlook": "Bullish",
+  "confidence": 82,
+
+  "summary": "",
+
+  "bullishFactors": [],
+
+  "bearishFactors": [],
+
+  "risks": [],
+
+  "opportunities": [],
+
+  "shortTermOutlook": "",
+
+  "longTermOutlook": "",
+
+  "technical": {},
+
+  "fundamental": {},
+
+  "newsSummary": {}
+}
+```
+
+Purpose:
+
+* AI Cache
+* Historical Tracking
+* Sentiment History
+
+Cache Duration:
+
+6 Hours
+
+---
+
+## Collection: watchlists
+
+Purpose:
+
+Store user watchlists.
+
+Document ID:
+
+User UID
+
+Schema:
+
+```json
+{
+  "uid": "user123",
+
+  "stocks": [
+    "RELIANCE",
+    "TCS",
+    "INFY",
+    "HDFCBANK"
+  ],
+
+  "updatedAt": "timestamp"
+}
+```
+
+Future:
+
+* Alerts
+* Portfolio Monitoring
+* Opportunity Radar
+
+---
+
+## Collection: searchHistory
+
+Purpose:
+
+Track user search activity.
+
+Schema:
+
+```json
+{
+  "uid": "user123",
+
+  "symbol": "",
+
+  "companyName": "",
+
+  "searchedAt": "timestamp"
+}
+```
+
+Uses:
+
+* Recently Viewed
+* Analytics
+* Trending Searches
+
+---
+
+## Collection: newsCache
+
+Purpose:
+
+Store fetched news.
+
+Reduces News API costs.
+
+Document ID:
+
+RELIANCE
+
+Schema:
+
+```json
+{
+  "symbol": "",
+
+  "articles": [
+    {
+      "title": "",
+      "description": "",
+      "source": "",
+      "publishedAt": "",
+      "url": ""
+    }
+  ],
+
+  "fetchedAt": "timestamp",
+
+  "expiresAt": "timestamp"
+}
+```
+
+Cache Duration:
+
+15 Minutes
+
+---
+
+# Firebase Cloud Functions
+
+---
+
+## searchCompany()
+
+Purpose:
+
+Autocomplete company search.
+
+Input:
+
+```json
+{
+  "query": "Reli"
+}
+```
+
+Output:
+
+```json
+[
+  {
+    "symbol": "RELIANCE",
+    "companyName": "Reliance Industries Ltd"
+  },
+  {
+    "symbol": "RPOWER",
+    "companyName": "Reliance Power Ltd"
+  }
+]
+```
+
+---
+
+## getCompany()
+
+Purpose:
+
+Fetch company metadata.
+
+Input:
+
+```json
+{
+  "symbol": "RELIANCE"
+}
+```
+
+Output:
+
+Company Information
+
+---
+
+## getNews()
+
+Purpose:
+
+Fetch latest company news.
+
+Flow:
+
+```text
+Check Cache
+
+If Fresh
+    Return Cache
+
+Else
+    Fetch News
+    Store Cache
+    Return News
+```
+
+Cache:
+
+15 Minutes
+
+---
+
+## getAnalysis()
+
+Purpose:
+
+Return AI analysis.
+
+Flow:
+
+```text
+Check Analysis Cache
+
+If Valid
+    Return Cache
+
+Else
+    Generate New Analysis
+```
+
+Cache:
+
+6 Hours
+
+---
+
+## analyzeCompany()
+
+Purpose:
+
+Generate institutional-grade AI research.
+
+Input:
+
+```json
+{
+  "symbol": "RELIANCE"
+}
+```
+
+Pipeline:
+
+```text
+Fetch Company Data
+        ↓
+
+Fetch Market Data
+        ↓
+
+Fetch News
+        ↓
+
+Calculate Indicators
+        ↓
+
+Build Context
+        ↓
+
+Send To AI
+        ↓
+
+Receive JSON
+        ↓
+
+Store Cache
+        ↓
+
+Return Analysis
+```
+
+---
+
+# AI Analysis Pipeline
+
+## Market Intelligence
+
+Collect:
+
+* Current Price
+* Market Cap
+* Volume
+* Daily Change
+* 52 Week High
+* 52 Week Low
+
+---
+
+## Fundamental Intelligence
+
+Collect:
+
+* Revenue Growth
+* Profit Growth
+* ROE
+* ROCE
+* PE Ratio
+* Debt To Equity
+* Cash Flow
+
+---
+
+## Technical Intelligence
+
+Calculate:
+
+* RSI
+* MACD
+* EMA 20
+* EMA 50
+* EMA 200
+* Support Levels
+* Resistance Levels
+* Trend Direction
+
+---
+
+## News Intelligence
+
+Collect:
+
+Latest company-related news.
+
+Process:
+
+```text
+Deduplicate
+     ↓
+
+Rank Relevance
+     ↓
+
+Summarize
+     ↓
+
+Generate Insights
+```
+
+---
+
+## AI Context Builder
+
+Create a structured context package.
+
+```json
+{
+  "company": {},
+  "marketData": {},
+  "fundamentals": {},
+  "technicals": {},
+  "news": []
+}
+```
+
+This becomes the AI input.
+
+---
+
+# Standard AI Output Contract
+
+Every AI provider must return:
+
+```json
+{
+  "company": "",
+
+  "outlook": "Bullish",
+
+  "confidence": 82,
+
+  "summary": "",
+
+  "bullishFactors": [],
+
+  "bearishFactors": [],
+
+  "risks": [],
+
+  "opportunities": [],
+
+  "shortTermOutlook": "",
+
+  "longTermOutlook": ""
+}
+```
+
+Never return plain text.
+
+Always return structured JSON.
+
+---
+
+# Caching Strategy
+
+Market Data
+
+TTL:
+
+5 Minutes
+
+---
+
+News
+
+TTL:
+
+15 Minutes
+
+---
+
+AI Analysis
+
+TTL:
+
+6 Hours
+
+---
+
+Company Metadata
+
+TTL:
+
+24 Hours
+
+---
+
+# Authentication Layer
+
+Provider:
+
+Firebase Authentication
+
+Methods:
+
+* Google Login
+* Email Login
+
+Future:
+
+* OTP Login
+* Passkeys
+
+---
+
+# Security Requirements
+
+Never expose:
+
+* OpenRouter API Key
+* News API Key
+* Firebase Admin Credentials
+
+All AI requests must be executed server-side.
+
+Frontend must never communicate directly with AI providers.
+
+---
+
+# Analytics Tracking
+
+Track:
+
+* Most searched stocks
+* Search frequency
+* Popular sectors
+* AI usage
+* User retention
+* Analysis generation volume
+
+---
+
+# Error Handling
+
+If AI fails:
+
+Return market data report.
+
+If News fails:
+
+Return cached news.
+
+If Market API fails:
+
+Return latest valid snapshot.
+
+System should degrade gracefully.
+
+---
+
+# Phase 1 Database Collections
+
+Final MVP Collections:
+
+```text
+users
+companies
+analyses
+watchlists
+searchHistory
+newsCache
+```
+
+---
+
+# Future Phase Collections
+
+Phase 2
+
+```text
+portfolios
+alerts
+sentimentHistory
+```
+
+Phase 3
+
+```text
+mutualFunds
+commodities
+fnoContracts
+```
+
+Phase 4
+
+```text
+aiAgents
+marketEvents
+opportunityRadar
+```
+
+---
+
+# Phase 1 Definition of Done
+
+✓ Search Indian listed companies
+
+✓ Company autocomplete
+
+✓ News aggregation
+
+✓ Technical analysis generation
+
+✓ Fundamental analysis generation
+
+✓ AI research generation
+
+✓ Analysis caching
+
+✓ User authentication
+
+✓ Watchlists
+
+✓ Search history
+
+✓ Secure server-side architecture
+
+✓ Production deployment
+
+The Phase 1 backend is complete when Athena can generate institutional-style AI research reports for any listed Indian company in under 30 seconds while minimizing API costs through intelligent caching.

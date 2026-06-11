@@ -1,4 +1,4 @@
-# Lipstick Product Landing Page Template
+# Template
 
 A bold, edgy product landing page with Swiss-inspired grid design, GSAP scroll animations, and dramatic typography. Perfect for beauty/cosmetics brands.
 

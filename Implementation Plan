@@ -1,0 +1,997 @@
+# ATHENA — IMPLEMENTATION PLAN (PHASE 1)
+
+## Executive Summary
+
+Phase 1 is not about building a stock website.
+
+Phase 1 is about building an AI Research Engine that can take a company name and generate a structured investment research report using:
+
+* Market Data
+* Fundamental Data
+* Technical Data
+* News Intelligence
+* AI Reasoning
+
+The end goal is:
+
+A user should be able to ask:
+
+> "Should I buy Reliance Industries?"
+
+and Athena should produce a professional research report within 10–30 seconds.
+
+---
+
+# DEVELOPMENT PHILOSOPHY
+
+Most developers build:
+
+UI → APIs → AI
+
+Athena should be built:
+
+Data → Intelligence → APIs → UI
+
+Reason:
+
+Without reliable data and intelligence pipelines, the frontend becomes meaningless.
+
+Therefore implementation order is:
+
+Phase A → Foundation
+
+Phase B → Data Layer
+
+Phase C → Intelligence Layer
+
+Phase D → AI Layer
+
+Phase E → Backend APIs
+
+Phase F → Frontend
+
+Phase G → Optimization
+
+Phase H → Production Deployment
+
+---
+
+# PHASE A — PROJECT FOUNDATION
+
+Estimated Time:
+1–2 Days
+
+Objective:
+
+Create production-ready project structure.
+
+---
+
+## Initialize Astro
+
+Install:
+
+* Astro 5
+* TypeScript
+* Tailwind CSS 4
+* ShadCN
+* ESLint
+* Prettier
+
+Folder Structure:
+
+```text
+src/
+
+components/
+layouts/
+pages/
+lib/
+services/
+stores/
+hooks/
+types/
+utils/
+styles/
+```
+
+---
+
+## Configure Environment Variables
+
+Create:
+
+```env
+OPENROUTER_API_KEY=
+FIREBASE_PROJECT_ID=
+FIREBASE_CLIENT_EMAIL=
+FIREBASE_PRIVATE_KEY=
+NEWS_API_KEY=
+```
+
+Never commit.
+
+Add:
+
+```gitignore
+.env
+.env.local
+```
+
+---
+
+## Setup Firebase
+
+Create:
+
+* Firebase Project
+* Firestore Database
+* Firebase Authentication
+* Cloud Functions
+
+---
+
+# PHASE B — COMPANY DATABASE
+
+Estimated Time:
+1 Day
+
+Objective:
+
+Build searchable Indian company directory.
+
+---
+
+## Collect Companies
+
+Acquire:
+
+NSE Listed Companies
+
+Store:
+
+```json
+{
+ "symbol":"RELIANCE",
+ "companyName":"Reliance Industries Ltd",
+ "sector":"Oil & Gas",
+ "exchange":"NSE"
+}
+```
+
+---
+
+## Firestore Import
+
+Create:
+
+companies collection
+
+Target:
+
+5000+ Indian companies
+
+---
+
+## Build Search Index
+
+Requirements:
+
+* Fast autocomplete
+* Fuzzy search
+* Partial matching
+
+Example:
+
+User types:
+
+"Rel"
+
+Return:
+
+Reliance Industries
+
+Reliance Power
+
+Reliance Infra
+
+---
+
+# PHASE C — MARKET DATA LAYER
+
+Estimated Time:
+2 Days
+
+Objective:
+
+Create unified market data service.
+
+---
+
+## Create Market Service
+
+Function:
+
+```typescript
+getMarketData(symbol)
+```
+
+Returns:
+
+```json
+{
+ price,
+ marketCap,
+ volume,
+ pe,
+ high52,
+ low52
+}
+```
+
+---
+
+## Data Sources
+
+Primary:
+
+Yahoo Finance
+
+Future:
+
+NSE APIs
+
+Fallback APIs
+
+---
+
+## Cache Market Data
+
+Store:
+
+5 Minutes
+
+Purpose:
+
+Reduce API calls
+
+Improve speed
+
+---
+
+# PHASE D — NEWS INTELLIGENCE LAYER
+
+Estimated Time:
+2 Days
+
+Objective:
+
+Collect company-specific news.
+
+---
+
+## Build News Aggregator
+
+Input:
+
+Company Name
+
+Output:
+
+Relevant Articles
+
+---
+
+## News Pipeline
+
+```text
+Fetch News
+     ↓
+Clean Articles
+     ↓
+Remove Duplicates
+     ↓
+Rank Relevance
+     ↓
+Store Cache
+```
+
+---
+
+## Relevance Engine
+
+Score:
+
+Title Match
+
+Company Match
+
+Recency
+
+Source Quality
+
+---
+
+## Cache
+
+15 Minutes
+
+Store in:
+
+newsCache collection
+
+---
+
+# PHASE E — TECHNICAL ANALYSIS ENGINE
+
+Estimated Time:
+2 Days
+
+Objective:
+
+Generate technical indicators.
+
+---
+
+## Build Indicator Service
+
+Calculate:
+
+RSI
+
+MACD
+
+EMA20
+
+EMA50
+
+EMA200
+
+Support
+
+Resistance
+
+Trend
+
+---
+
+## Example Output
+
+```json
+{
+ "rsi":63,
+ "trend":"Bullish",
+ "support":3120,
+ "resistance":3350
+}
+```
+
+---
+
+## Plain-English Translator
+
+Convert:
+
+```text
+RSI 72
+```
+
+To:
+
+```text
+Stock may be overbought.
+```
+
+---
+
+# PHASE F — FUNDAMENTAL ANALYSIS ENGINE
+
+Estimated Time:
+2 Days
+
+Objective:
+
+Generate business health metrics.
+
+---
+
+## Collect
+
+Revenue
+
+Profit
+
+Debt
+
+ROE
+
+ROCE
+
+Cash Flow
+
+Valuation
+
+---
+
+## Calculate
+
+Growth
+
+Profitability
+
+Leverage
+
+Efficiency
+
+Valuation
+
+---
+
+## Output
+
+```json
+{
+ health:"Strong",
+ revenueGrowth:18,
+ debtLevel:"Low"
+}
+```
+
+---
+
+# PHASE G — AI CONTEXT BUILDER
+
+Estimated Time:
+1 Day
+
+Objective:
+
+Create structured AI input.
+
+---
+
+## Combine
+
+Market Data
+
+Technicals
+
+Fundamentals
+
+News
+
+Company Metadata
+
+---
+
+## Create Context
+
+```json
+{
+ marketData:{},
+ fundamentals:{},
+ technicals:{},
+ news:[]
+}
+```
+
+This becomes AI input.
+
+---
+
+# PHASE H — AI RESEARCH ENGINE
+
+Estimated Time:
+3 Days
+
+Objective:
+
+Generate professional research reports.
+
+---
+
+## OpenRouter Integration
+
+Create:
+
+```typescript
+generateResearch()
+```
+
+---
+
+## Prompt Design
+
+System Prompt:
+
+You are a senior equity research analyst.
+
+Analyze using:
+
+* Fundamentals
+* Technicals
+* News
+
+Return JSON only.
+
+---
+
+## JSON Schema
+
+```json
+{
+ "outlook":"",
+ "confidence":0,
+ "summary":"",
+ "bullishFactors":[],
+ "bearishFactors":[],
+ "risks":[],
+ "opportunities":[]
+}
+```
+
+---
+
+## Validation
+
+Validate with Zod.
+
+Reject malformed output.
+
+Retry if necessary.
+
+---
+
+# PHASE I — ANALYSIS CACHE
+
+Estimated Time:
+1 Day
+
+Objective:
+
+Prevent excessive AI costs.
+
+---
+
+## Logic
+
+```text
+Request
+    ↓
+
+Check Cache
+
+Exists?
+   Yes
+     ↓
+Return
+
+No
+     ↓
+Generate
+     ↓
+Store
+     ↓
+Return
+```
+
+---
+
+## Cache Duration
+
+6 Hours
+
+---
+
+## Expected Savings
+
+70–95% AI cost reduction.
+
+---
+
+# PHASE J — BACKEND API LAYER
+
+Estimated Time:
+2 Days
+
+Endpoints:
+
+---
+
+## Search
+
+```http
+GET /api/search
+```
+
+---
+
+## Company
+
+```http
+GET /api/company
+```
+
+---
+
+## News
+
+```http
+GET /api/news
+```
+
+---
+
+## Analysis
+
+```http
+GET /api/analysis
+```
+
+---
+
+## Watchlist
+
+```http
+POST /api/watchlist
+```
+
+---
+
+## Authentication
+
+```http
+POST /api/auth
+```
+
+---
+
+# PHASE K — FRONTEND
+
+Estimated Time:
+4 Days
+
+---
+
+## Landing Page
+
+Headline:
+
+Ask The Market Anything
+
+CTA:
+
+Start Researching
+
+---
+
+## Search Interface
+
+Autocomplete
+
+Recent Searches
+
+Suggestions
+
+---
+
+## Research Page
+
+Sections:
+
+Company Overview
+
+Market Snapshot
+
+News Intelligence
+
+Technical Analysis
+
+Fundamental Analysis
+
+AI Verdict
+
+Risks
+
+Opportunities
+
+---
+
+## AI Report Card
+
+Display:
+
+Confidence
+
+Outlook
+
+Reasoning
+
+Factors
+
+---
+
+# PHASE L — USER SYSTEM
+
+Estimated Time:
+1 Day
+
+---
+
+## Authentication
+
+Google Login
+
+Email Login
+
+---
+
+## User Features
+
+Watchlist
+
+Recent Searches
+
+Saved Reports
+
+---
+
+# PHASE M — OBSERVABILITY
+
+Estimated Time:
+1 Day
+
+---
+
+## Sentry
+
+Track:
+
+Errors
+
+Crashes
+
+API Failures
+
+---
+
+## PostHog
+
+Track:
+
+Searches
+
+Analyses
+
+Retention
+
+Popular Stocks
+
+---
+
+# PHASE N — SEO IMPLEMENTATION
+
+Estimated Time:
+2 Days
+
+---
+
+## Dynamic Routes
+
+```text
+/company/reliance-industries
+/company/tata-motors
+/company/infosys
+```
+
+---
+
+## Metadata
+
+Generate:
+
+Title
+
+Description
+
+OG Tags
+
+Twitter Cards
+
+JSON-LD
+
+---
+
+## Sitemap
+
+Auto Generate
+
+---
+
+## Robots
+
+Index Public Pages
+
+Block Private Pages
+
+---
+
+# PHASE O — PERFORMANCE OPTIMIZATION
+
+Estimated Time:
+2 Days
+
+Goals:
+
+Lighthouse 95+
+
+---
+
+## Techniques
+
+Server Rendering
+
+Caching
+
+Code Splitting
+
+Image Optimization
+
+Lazy Loading
+
+Static Generation
+
+ISR Strategy
+
+---
+
+# PHASE P — SECURITY
+
+Estimated Time:
+1 Day
+
+---
+
+## Protect Keys
+
+Store:
+
+Firebase Secrets
+
+Never:
+
+Frontend
+
+GitHub
+
+Client Bundle
+
+---
+
+## Firestore Rules
+
+Restrict:
+
+User Data
+
+Watchlists
+
+Search History
+
+---
+
+## Rate Limits
+
+Anonymous:
+
+10 Analyses Daily
+
+Authenticated:
+
+100 Daily
+
+---
+
+# PHASE Q — TESTING
+
+Estimated Time:
+2 Days
+
+---
+
+## Unit Tests
+
+Market Service
+
+News Service
+
+AI Service
+
+---
+
+## Integration Tests
+
+API Layer
+
+Database Layer
+
+---
+
+## E2E
+
+Search Company
+
+Generate Analysis
+
+Add Watchlist
+
+Login
+
+---
+
+# PHASE R — DEPLOYMENT
+
+Estimated Time:
+1 Day
+
+---
+
+## GitHub
+
+Main Branch
+
+Develop Branch
+
+---
+
+## Vercel
+
+Production
+
+Preview Deployments
+
+---
+
+## Firebase
+
+Functions
+
+Firestore
+
+Authentication
+
+---
+
+# PHASE 1 SUCCESS CRITERIA
+
+Athena is considered complete when:
+
+✓ User can search any Indian company
+
+✓ Company autocomplete works
+
+✓ Market data loads
+
+✓ News intelligence loads
+
+✓ Technical analysis works
+
+✓ Fundamental analysis works
+
+✓ AI report generation works
+
+✓ Reports are cached
+
+✓ Watchlists work
+
+✓ Authentication works
+
+✓ SEO pages are generated
+
+✓ Lighthouse score exceeds 95
+
+✓ Response time remains under 30 seconds
+
+✓ All API keys remain secure
+
+At this point Athena transitions from a prototype into a usable AI-powered investment research platform and becomes the foundation for future modules such as Portfolio Doctor, Opportunity Radar, Mutual Fund Intelligence, F&O Intelligence, and Athena Copilot.

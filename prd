@@ -1,0 +1,548 @@
+# PRD — Project Athena
+
+## Product Name
+
+Project Athena
+
+Tagline:
+"Your AI Investment Research Terminal"
+
+Alternative Taglines:
+
+* Bloomberg Terminal for Retail Investors
+* Ask the Market Anything
+* Research Before You Invest
+* AI-Powered Investment Intelligence
+* Your Personal Equity Research Team
+
+---
+
+# Vision
+
+Retail investors are overwhelmed by information but starved for clarity.
+
+Today they must switch between:
+
+* Moneycontrol
+* TradingView
+* Tickertape
+* Economic Times
+* YouTube
+* Reddit
+* Twitter/X
+* Company Annual Reports
+
+To answer one question:
+
+"Should I pay attention to this investment?"
+
+Project Athena combines market data, technical analysis, fundamental analysis, news, and AI reasoning into one intelligent research assistant.
+
+The product does not aim to replace investors.
+
+The product aims to reduce research time from hours to minutes.
+
+---
+
+# Mission
+
+Give every retail investor access to institutional-grade research intelligence.
+
+---
+
+# Target Users
+
+Primary:
+
+* Retail investors
+* Long-term investors
+* Swing traders
+* Beginners seeking explanations
+
+Secondary:
+
+* Finance students
+* Analysts
+* Investment clubs
+* Financial content creators
+
+---
+
+# Initial Market
+
+India
+
+Supported Assets:
+
+* NSE Stocks
+* BSE Stocks
+
+Future Expansion:
+
+* Mutual Funds
+* ETFs
+* Commodities
+* Futures & Options
+* Global Equities
+* Crypto
+
+---
+
+# Core Product Philosophy
+
+Current Platforms:
+
+User searches stock.
+
+Platform shows data.
+
+User must think.
+
+Athena:
+
+User asks question.
+
+Athena researches.
+
+Athena explains.
+
+Athena highlights risks.
+
+Athena identifies opportunities.
+
+User decides.
+
+---
+
+# Primary User Journey
+
+User enters:
+
+"Reliance Industries"
+
+or
+
+"Should I buy Reliance?"
+
+Athena automatically:
+
+1. Fetches market data
+2. Fetches company fundamentals
+3. Fetches latest news
+4. Calculates technical indicators
+5. Creates research context
+6. Generates AI analysis
+7. Displays actionable insights
+
+Research time:
+
+Traditional:
+30–60 minutes
+
+Athena:
+30–60 seconds
+
+---
+
+# Core Features (Phase 1)
+
+## AI Company Research
+
+Purpose:
+
+Generate institutional-quality stock research reports.
+
+Input:
+
+Company Name
+
+Output:
+
+* Outlook
+* Confidence Score
+* Summary
+* Bullish Factors
+* Bearish Factors
+* Key Risks
+* Short-Term View
+* Long-Term View
+
+Example:
+
+Outlook: Bullish
+
+Confidence: 82%
+
+Bullish Factors:
+✓ Revenue Growth
+✓ Positive News Flow
+✓ Strong Technical Trend
+
+Risks:
+✗ High Valuation
+✗ Sector Headwinds
+
+---
+
+## AI Investment Chat
+
+Users can ask:
+
+* Should I buy Reliance?
+* Why is Tata Motors rising?
+* Is Infosys overvalued?
+* Compare HDFC Bank and ICICI Bank.
+* What are the biggest risks for TCS?
+
+Athena responds using real-time market intelligence.
+
+---
+
+## News Intelligence
+
+Instead of showing raw news.
+
+AI summarizes:
+
+What happened?
+
+Why does it matter?
+
+How important is it?
+
+Impact:
+
+* Positive
+* Negative
+* Neutral
+
+Importance:
+
+* Low
+* Medium
+* High
+
+---
+
+## Technical Intelligence
+
+Generate:
+
+* Trend Direction
+* RSI Analysis
+* MACD Analysis
+* Support Levels
+* Resistance Levels
+* Breakout Detection
+
+AI converts technical jargon into plain English.
+
+Example:
+
+Instead of:
+
+RSI = 72
+
+Show:
+
+The stock appears overbought and may experience short-term profit booking.
+
+---
+
+## Fundamental Intelligence
+
+Analyze:
+
+* Revenue Growth
+* Profit Growth
+* Debt
+* Cash Flow
+* ROE
+* ROCE
+* Valuation Metrics
+
+AI explains:
+
+What is improving?
+
+What is deteriorating?
+
+---
+
+## Confidence Engine
+
+Every analysis includes:
+
+0–100 confidence score.
+
+Calculation considers:
+
+* News alignment
+* Fundamental strength
+* Technical agreement
+* Data completeness
+
+---
+
+## Source Transparency
+
+Display:
+
+Analysis based on:
+
+✓ News Articles
+
+✓ Financial Data
+
+✓ Technical Indicators
+
+✓ Company Information
+
+Purpose:
+
+Increase trust.
+
+---
+
+## What Changed?
+
+Show differences between previous and current analysis.
+
+Example:
+
+Yesterday:
+Neutral
+
+Today:
+Bullish
+
+Reason:
+
+✓ Earnings Surprise
+
+✓ Positive News
+
+✓ Increased Buying Activity
+
+---
+
+# User Interface
+
+## Landing Page
+
+Headline:
+
+Ask the Market Anything.
+
+Subheadline:
+
+Institutional-grade research for retail investors.
+
+CTA:
+
+Start Researching
+
+---
+
+## Search Experience
+
+Search by:
+
+* Company Name
+* Symbol
+
+Examples:
+
+Reliance Industries
+
+Tata Motors
+
+Infosys
+
+HDFC Bank
+
+---
+
+## Research Dashboard
+
+Sections:
+
+1. Company Overview
+2. Price Information
+3. News Intelligence
+4. Technical Intelligence
+5. Fundamental Intelligence
+6. AI Verdict
+7. Risks
+8. Opportunities
+
+---
+
+# AI Output Schema
+
+{
+"company": "",
+"outlook": "",
+"confidence": 0,
+"summary": "",
+"bullishFactors": [],
+"bearishFactors": [],
+"keyRisks": [],
+"opportunities": [],
+"shortTermOutlook": "",
+"longTermOutlook": ""
+}
+
+---
+
+# Non Functional Requirements
+
+Performance:
+
+* Analysis under 30 seconds
+* Mobile responsive
+* Fast loading
+
+Security:
+
+* API keys never exposed
+* Server-side AI requests
+* Firebase Security Rules
+
+Reliability:
+
+* Error handling
+* Fallback mechanisms
+* Analysis caching
+
+---
+
+# Technology Stack
+
+Frontend:
+
+* Next.js 15
+* TypeScript
+* TailwindCSS
+* ShadCN
+
+Backend:
+
+* Firebase Functions
+
+Database:
+
+* Firestore
+
+Authentication:
+
+* Firebase Auth
+
+Deployment:
+
+* Vercel
+
+AI:
+
+* OpenRouter
+
+Market Data:
+
+* Yahoo Finance
+
+News Sources:
+
+* Economic Times
+* Moneycontrol
+* Mint
+* Business Standard
+* Other approved feeds
+
+---
+
+# Future Roadmap
+
+Phase 2
+
+Portfolio Doctor
+
+Users upload portfolio.
+
+Athena identifies:
+
+* Concentration Risk
+* Weak Holdings
+* Strong Holdings
+* Diversification Gaps
+
+---
+
+Phase 3
+
+Opportunity Radar
+
+Athena scans market daily.
+
+Detects:
+
+* Emerging Opportunities
+* Improving Sentiment
+* Unusual Activity
+
+---
+
+Phase 4
+
+Mutual Fund Intelligence
+
+Analyze:
+
+* Holdings
+* Overlap
+* Risk
+* Performance
+
+---
+
+Phase 5
+
+F&O Intelligence
+
+Analyze:
+
+* Options Chain
+* Open Interest
+* Max Pain
+* Market Positioning
+
+---
+
+Phase 6
+
+Athena Copilot
+
+User asks:
+
+"What should I focus on this week?"
+
+Athena generates a personalized market briefing.
+
+---
+
+# Success Metrics
+
+Primary:
+
+* Daily Active Users
+* Average Session Duration
+* Analysis Requests Per User
+
+Secondary:
+
+* Watchlist Additions
+* Returning Users
+* AI Chat Usage
+
+North Star Metric:
+
+Number of investment decisions supported by Athena.
