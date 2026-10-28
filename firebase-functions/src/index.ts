@@ -3,6 +3,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
+import axios from "axios";
 import { agenticOrchestratorEndpoint } from "./api/agenticOrchestrator";
 import { traderOrchestratorEndpoint } from "./api/traderOrchestrator";
 import { webScraperEndpoint } from "./api/webScraper";
@@ -79,6 +80,114 @@ const proxyFetch = async (baseUrl: string, params: QueryParams, apiKey: string):
   if (!response.ok) throw new Error(`External API error: ${response.status} ${response.statusText}`);
   return await response.json();
 };
+
+// ── Helper: Server-side HTTP reverse proxy (replaces third-party CORS proxies like allorigins)
+const createProxyHandler = (
+  targetBase: string,
+  customHeaders?: Record<string, string>,
+  pathRewrite?: (path: string) => string
+) => {
+  return async (req: Request, res: Response) => {
+    try {
+      let subPath = req.url || '';
+      if (pathRewrite) {
+        subPath = pathRewrite(subPath);
+      }
+      const targetUrl = `${targetBase.replace(/\/$/, '')}${subPath.startsWith('/') ? '' : '/'}${subPath}`;
+
+      const forwardHeaders: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': (req.headers.accept as string) || '*/*',
+        ...(customHeaders || {})
+      };
+
+      if (req.headers.authorization) {
+        forwardHeaders['Authorization'] = req.headers.authorization as string;
+      }
+      if (req.headers['content-type']) {
+        forwardHeaders['Content-Type'] = req.headers['content-type'] as string;
+      }
+
+      const response = await axios({
+        method: req.method,
+        url: targetUrl,
+        headers: forwardHeaders,
+        data: ['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase()) ? req.body : undefined,
+        responseType: 'arraybuffer',
+        validateStatus: () => true
+      });
+
+      const contentType = response.headers['content-type'];
+      if (contentType) res.setHeader('content-type', String(contentType));
+      return res.status(response.status).send(response.data);
+    } catch (err: any) {
+      console.error(`[Proxy Error -> ${targetBase}]:`, err.message);
+      return res.status(502).json({ error: 'Proxy request failed', details: err.message });
+    }
+  };
+};
+
+// Generic proxy endpoint: /proxy?url=...
+const genericProxyHandler = async (req: Request, res: Response): Promise<any> => {
+  const targetUrl = req.query.url as string;
+  if (!targetUrl) {
+    return res.status(400).json({ error: "Missing 'url' query parameter" });
+  }
+
+  try {
+    const parsed = new URL(targetUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return res.status(400).json({ error: "Invalid URL protocol" });
+    }
+
+    const forwardHeaders: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      'Accept': (req.headers.accept as string) || '*/*'
+    };
+
+    if (req.headers.authorization) {
+      forwardHeaders['Authorization'] = req.headers.authorization as string;
+    }
+    if (req.headers['content-type']) {
+      forwardHeaders['Content-Type'] = req.headers['content-type'] as string;
+    }
+
+    const response = await axios({
+      method: req.method,
+      url: targetUrl,
+      headers: forwardHeaders,
+      data: ['POST', 'PUT', 'PATCH'].includes(req.method.toUpperCase()) ? req.body : undefined,
+      responseType: 'arraybuffer',
+      validateStatus: () => true
+    });
+
+    const contentType = response.headers['content-type'];
+    if (contentType) res.setHeader('content-type', String(contentType));
+    return res.status(response.status).send(response.data);
+  } catch (err: any) {
+    console.error(`[Generic Proxy Error -> ${targetUrl}]:`, err.message);
+    return res.status(502).json({ error: 'Generic proxy failed', details: err.message });
+  }
+};
+
+// ── Mount reverse proxy routes for external finance and search APIs
+app.use(["/yahoo1", "/api/yahoo1"], createProxyHandler("https://query1.finance.yahoo.com"));
+app.use(["/yahoo2", "/api/yahoo2"], createProxyHandler("https://query2.finance.yahoo.com"));
+app.use(["/groww", "/api/groww"], createProxyHandler("https://groww.in"));
+app.use(["/gnews", "/api/gnews"], createProxyHandler("https://gnews.io/api"));
+app.use(["/mediastack", "/api/mediastack"], createProxyHandler("https://api.mediastack.com"));
+app.use(["/marketstack", "/api/marketstack"], createProxyHandler("http://api.marketstack.com"));
+app.use(["/indianapi", "/api/indianapi"], createProxyHandler("https://stock.indianapi.in", {
+  'X-API-Key': process.env.INDIANAPI_KEY || ''
+}));
+app.use(["/tradingview", "/api/tradingview"], createProxyHandler("https://scanner.tradingview.com", {
+  'Origin': 'https://www.tradingview.com',
+  'Referer': 'https://www.tradingview.com/'
+}));
+app.use(["/googlenews", "/api/googlenews"], createProxyHandler("https://news.google.com"));
+app.use(["/llm/nvidia", "/api/llm/nvidia"], createProxyHandler("https://integrate.api.nvidia.com", undefined, () => "/v1/chat/completions"));
+app.use(["/llm/openrouter", "/api/llm/openrouter"], createProxyHandler("https://openrouter.ai/api/v1"));
+app.all(["/proxy", "/api/proxy"], genericProxyHandler);
 
 /* ─── API LAYER ───────────────────────────────────────────────────────────── */
 
@@ -309,7 +418,7 @@ async function getLLMAnalysis(context: any): Promise<any> {
   // Proxy to NVIDIA NIM or OpenRouter securely
   const nvidiaKey = process.env.NVIDIA_NIM_KEY || "";
   const openRouterKey = process.env.OPENROUTER_KEY || "";
-  const model = "meta/llama-3.1-70b-instruct";
+  const model = "openai/gpt-oss-20b";
 
   const prompt = `You are a senior equity research analyst. Analyze ONLY the data provided. Return valid JSON.
 Company: ${context.company}
@@ -330,7 +439,8 @@ Return JSON: { "verdict": "BULLISH|BEARISH|NEUTRAL|SIDEWAYS", "confidence": 0-10
       { role: "user", content: prompt }
     ],
     temperature: 0.1,
-    max_tokens: 4096
+    max_tokens: 4096,
+    response_format: { type: "json_object" }
   });
 
   // Try NVIDIA first, fallback to OpenRouter
@@ -352,7 +462,8 @@ Return JSON: { "verdict": "BULLISH|BEARISH|NEUTRAL|SIDEWAYS", "confidence": 0-10
       });
       if (!resp.ok) continue;
       const json = await resp.json();
-      const content = json.choices?.[0]?.message?.content || "";
+      const choice = json.choices?.[0]?.message;
+      const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
       const parsed = JSON.parse(content);
       return { ...parsed, source: provider.label };
     } catch (e) {

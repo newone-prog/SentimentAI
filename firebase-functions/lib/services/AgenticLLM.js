@@ -8,30 +8,22 @@ class AgenticLLM {
      * Generates a response with autonomous tool-calling loops.
      * If the LLM requests a search, this runner executes the search and feeds it back.
      */
-    static async runWithTools(prompt, systemPrompt, maxLoops = 3) {
-        // We append instructions to the system prompt telling the LLM how to use tools
-        // Since we are forcing a JSON response in OpenRouterClient, we can teach it to return
-        // {"action": "SEARCH", "query": "reliance latest earnings"} to trigger the tool.
+    static async runWithTools(prompt, systemPrompt, maxLoops = 2) {
+        if (maxLoops <= 0) {
+            return await OpenRouterClient_1.OpenRouterClient.generate(prompt, systemPrompt);
+        }
         const toolAwareSystemPrompt = `${systemPrompt}
 
-CRITICAL: You are an agentic AI. The data provided to you so far is SHALLOW (only headlines and numbers). 
-You MUST use your Web Scraper tool to gather deeper context, underlying causes, and recent developments BEFORE you output your final report.
-
-To trigger a search, output ONLY this exact JSON format (and nothing else):
+You are an agentic AI analyst. If you need additional qualitative web research, you may trigger a search:
 {
   "action": "SEARCH",
-  "query": "your search query here"
+  "query": "company name recent developments earnings"
 }
 
-To read the full text of a specific URL, output ONLY this exact JSON format:
-{
-  "action": "READ_URL",
-  "url": "https://example.com/article"
-}
-
-Do NOT output your final JSON response until you have used these tools to gather sufficient institutional-grade context.`;
+If search context is already available or you have enough information, output ONLY the final institutional-grade JSON report matching the schema.`;
         let currentPrompt = prompt;
         let loopCount = 0;
+        const executedQueries = new Set();
         while (loopCount < maxLoops) {
             loopCount++;
             const rawResponse = await OpenRouterClient_1.OpenRouterClient.generate(currentPrompt, toolAwareSystemPrompt);
@@ -40,27 +32,32 @@ Do NOT output your final JSON response until you have used these tools to gather
                 parsed = OpenRouterClient_1.OpenRouterClient.parseJson(rawResponse);
             }
             catch (e) {
-                // If it failed to parse, it might not be a tool call. Just return raw.
+                return rawResponse;
+            }
+            // If already returning final report schema, return it immediately
+            if (parsed && (parsed.researchPaper || parsed.reasoning || parsed.overallBearCaseStrength !== undefined)) {
                 return rawResponse;
             }
             // Check if the LLM invoked a tool
-            if (parsed && parsed.action === "SEARCH" && parsed.query) {
+            if (parsed && parsed.action === "SEARCH" && parsed.query && !executedQueries.has(parsed.query)) {
+                executedQueries.add(parsed.query);
                 console.log(`[AgenticLLM] Tool Triggered: SEARCH -> ${parsed.query}`);
                 const results = await AgenticScraper_1.AgenticScraper.search(parsed.query, 3);
                 const searchContext = `[WEB SEARCH RESULTS FOR "${parsed.query}"]\n` +
                     results.map(r => `Title: ${r.title}\nLink: ${r.link}\nSnippet: ${r.snippet}\n`).join('\n') +
-                    `\nBased on these results, continue your reasoning.`;
+                    `\nSynthesize these findings and produce your final complete JSON report.`;
                 currentPrompt += `\n\n[System: You searched for "${parsed.query}"]\n${searchContext}`;
-                continue; // Loop again with the new context
+                continue;
             }
-            if (parsed && parsed.action === "READ_URL" && parsed.url) {
+            if (parsed && parsed.action === "READ_URL" && parsed.url && !executedQueries.has(parsed.url)) {
+                executedQueries.add(parsed.url);
                 console.log(`[AgenticLLM] Tool Triggered: READ_URL -> ${parsed.url}`);
                 const content = await AgenticScraper_1.AgenticScraper.extractPageContent(parsed.url);
-                const urlContext = `[CONTENT OF ${parsed.url}]\n${content}\n\nBased on this content, continue your reasoning.`;
+                const urlContext = `[CONTENT OF ${parsed.url}]\n${content.substring(0, 1500)}\n\nSynthesize this content and produce your final complete JSON report.`;
                 currentPrompt += `\n\n[System: You read the URL "${parsed.url}"]\n${urlContext}`;
                 continue;
             }
-            // If no tool was invoked, this is the final answer
+            // If no valid tool was invoked, this is the final answer
             return rawResponse;
         }
         // If max loops reached, force a final generation without tool instructions

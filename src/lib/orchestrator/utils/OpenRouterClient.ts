@@ -3,7 +3,7 @@ export class OpenRouterClient {
     return import.meta.env.VITE_OPENROUTER_KEY || "";
   }
 
-  private static model = "meta-llama/llama-3.1-70b-instruct";
+  private static model = "openai/gpt-oss-20b";
 
   private static getNvidiaKey(): string {
     return import.meta.env.VITE_NVIDIA_NIM_KEY || "";
@@ -24,7 +24,7 @@ export class OpenRouterClient {
 
     // 1. Try NVIDIA NIM First
     if (nvidiaKey) {
-      const maxRetries = 5;
+      const maxRetries = 3;
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           console.log(`[OpenRouterClient] Sending request to NVIDIA NIM using model: ${this.model} (Attempt ${attempt})`);
@@ -37,18 +37,19 @@ export class OpenRouterClient {
               "Accept": "application/json"
             },
             body: JSON.stringify({
-              model: "meta/llama-3.1-70b-instruct", // Nvidia NIM specific model name format
+              model: this.model,
               messages: [
                 { role: "system", content: systemPrompt },
                 { role: "user", content: prompt }
               ],
               temperature: 0.1,
               max_tokens: 4096,
+              response_format: { type: "json_object" }
             })
           });
 
           if (response.status === 429) {
-            const delayMs = attempt * 3000; // 3s, 6s, 9s, 12s, 15s
+            const delayMs = attempt * 2000;
             console.warn(`[OpenRouterClient] NVIDIA NIM 429 Too Many Requests. Retrying in ${delayMs}ms...`);
             await new Promise(resolve => setTimeout(resolve, delayMs));
             continue; // Retry
@@ -60,13 +61,15 @@ export class OpenRouterClient {
           }
 
           const data = await response.json();
-          const content = data.choices?.[0]?.message?.content || "";
+          const choice = data.choices?.[0]?.message;
+          const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
           console.log(`[OpenRouterClient] Successfully retrieved response from NVIDIA NIM.`);
           return content.trim();
         } catch (error) {
           console.warn(`[OpenRouterClient] NVIDIA NIM failed on attempt ${attempt}:`, (error as Error).message);
           lastError = error as Error;
-          if (attempt === maxRetries) break; // Exhausted retries
+          // If not a rate limit error, don't keep repeating invalid requests
+          if (attempt === maxRetries || !((error as Error).message.includes('429'))) break;
         }
       }
     }
@@ -102,7 +105,8 @@ export class OpenRouterClient {
         }
 
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || "";
+        const choice = data.choices?.[0]?.message;
+        const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
         console.log(`[OpenRouterClient] Successfully retrieved response from OpenRouter.`);
         return content.trim();
       } catch (error) {

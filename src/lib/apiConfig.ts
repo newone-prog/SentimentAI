@@ -9,7 +9,7 @@ export const API_CONFIG = {
   FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
   FIREBASE_CLIENT_EMAIL: import.meta.env.VITE_FIREBASE_CLIENT_EMAIL || '',
   FIREBASE_PRIVATE_KEY: import.meta.env.VITE_FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
-  FIREBASE_FUNCTIONS_URL: import.meta.env.VITE_FIREBASE_FUNCTIONS_URL || 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+  FIREBASE_FUNCTIONS_URL: import.meta.env.VITE_FIREBASE_FUNCTIONS_URL || '/api',
 };
 
 // Validate required keys in development
@@ -25,8 +25,6 @@ if (import.meta.env.DEV) {
 
 export const isProduction = import.meta.env.PROD;
 
-// In dev mode Vite proxy handles routing.
-// In prod the deployed backend (Firebase Functions / Cloud Run) handles /api/* and /llm/* routes.
-export const hasBackendProxy = isProduction
-  ? Boolean(import.meta.env.VITE_BACKEND_URL)
-  : true;
+// In dev mode Vite proxy handles /api/* routes.
+// In prod Firebase Hosting rewrites /api/** to cloud functions.
+export const hasBackendProxy = true;

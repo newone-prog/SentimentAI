@@ -297,7 +297,7 @@ async function getLLMAnalysis(context: any): Promise<any> {
   // Proxy to NVIDIA NIM or OpenRouter securely
   const nvidiaKey = process.env.NVIDIA_NIM_KEY || "";
   const openRouterKey = process.env.OPENROUTER_KEY || "";
-  const model = "meta/llama-3.1-70b-instruct";
+  const model = "openai/gpt-oss-20b";
 
   const prompt = `You are a senior equity research analyst. Analyze ONLY the data provided. Return valid JSON.
 Company: ${context.company}

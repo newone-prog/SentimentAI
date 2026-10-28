@@ -5,7 +5,7 @@ class OpenRouterClient {
     static getApiKey() {
         return process.env.OPENROUTER_KEY || process.env.VITE_OPENROUTER_KEY || "";
     }
-    static model = "meta-llama/llama-3.1-70b-instruct";
+    static model = "openai/gpt-oss-20b";
     static getNvidiaKey() {
         return process.env.NVIDIA_NIM_KEY || process.env.VITE_NVIDIA_NIM_KEY || "";
     }
@@ -29,13 +29,14 @@ class OpenRouterClient {
                         "Accept": "application/json"
                     },
                     body: JSON.stringify({
-                        model: "meta/llama-3.1-70b-instruct", // Nvidia NIM specific model name format
+                        model: this.model,
                         messages: [
                             { role: "system", content: systemPrompt },
                             { role: "user", content: prompt }
                         ],
                         temperature: 0.1,
                         max_tokens: 4096,
+                        response_format: { type: "json_object" }
                     })
                 });
                 if (!response.ok) {
@@ -43,7 +44,8 @@ class OpenRouterClient {
                     throw new Error(`NVIDIA NIM API error: ${response.status} ${response.statusText} - ${errorText}`);
                 }
                 const data = await response.json();
-                const content = data.choices?.[0]?.message?.content || "";
+                const choice = data.choices?.[0]?.message;
+                const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
                 console.log(`[OpenRouterClient] Successfully retrieved response from NVIDIA NIM.`);
                 return content.trim();
             }
@@ -80,7 +82,8 @@ class OpenRouterClient {
                     throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
                 }
                 const data = await response.json();
-                const content = data.choices?.[0]?.message?.content || "";
+                const choice = data.choices?.[0]?.message;
+                const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
                 console.log(`[OpenRouterClient] Successfully retrieved response from OpenRouter.`);
                 return content.trim();
             }

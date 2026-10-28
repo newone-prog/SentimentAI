@@ -2,37 +2,16 @@ import axios from 'axios';
 
 export class OpenRouterClient {
   static async generate(prompt: string, systemPrompt: string): Promise<string> {
-    const apiKey = process.env.OPENROUTER_KEY || process.env.NVIDIA_NIM_KEY;
-    const url = process.env.OPENROUTER_KEY 
-      ? 'https://openrouter.ai/api/v1/chat/completions'
-      : 'https://integrate.api.nvidia.com/v1/chat/completions';
-    const model = process.env.OPENROUTER_KEY 
-      ? 'meta-llama/llama-3.1-70b-instruct'
-      : 'meta/llama-3.1-70b-instruct';
+    const nvidiaKey = process.env.NVIDIA_NIM_KEY || process.env.VITE_NVIDIA_NIM_KEY;
+    const openrouterKey = process.env.OPENROUTER_KEY || process.env.VITE_OPENROUTER_KEY;
+    const model = 'openai/gpt-oss-20b';
 
-    try {
-      const response = await axios.post(url, {
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
-        ],
-        temperature: 0.1,
-        max_tokens: 4096,
-        response_format: { type: 'json_object' }
-      }, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      return response.data.choices[0].message.content;
-    } catch (e: any) {
-      if (e.response && e.response.status === 402 && process.env.NVIDIA_NIM_KEY && url.includes('openrouter')) {
-        console.warn('OpenRouter returned 402 (Payment Required). Falling back to NVIDIA NIM...');
-        const fallbackResponse = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
-          model: 'meta/llama-3.1-70b-instruct',
+    // 1. Try NVIDIA NIM First
+    if (nvidiaKey) {
+      try {
+        console.log(`[Backend OpenRouterClient] Calling NVIDIA NIM using ${model}...`);
+        const response = await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
+          model,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: prompt }
@@ -42,15 +21,55 @@ export class OpenRouterClient {
           response_format: { type: 'json_object' }
         }, {
           headers: {
-            'Authorization': `Bearer ${process.env.NVIDIA_NIM_KEY}`,
+            'Authorization': `Bearer ${nvidiaKey}`,
             'Content-Type': 'application/json'
-          }
+          },
+          timeout: 180000
         });
-        return fallbackResponse.data.choices[0].message.content;
+
+        const choice = response.data?.choices?.[0]?.message;
+        const content = choice?.content || choice?.reasoning_content || choice?.reasoning;
+        if (content) {
+          return content;
+        }
+      } catch (nvidiaErr: any) {
+        console.warn('[Backend OpenRouterClient] NVIDIA NIM failed, falling back to OpenRouter:', nvidiaErr?.message);
       }
-      console.error('OpenRouterClient Error:', e.message);
-      throw e;
     }
+
+    // 2. Fallback to OpenRouter
+    if (openrouterKey) {
+      try {
+        console.log(`[Backend OpenRouterClient] Calling OpenRouter using ${model}...`);
+        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+          model,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: prompt }
+          ],
+          temperature: 0.1,
+          max_tokens: 4096,
+          response_format: { type: 'json_object' }
+        }, {
+          headers: {
+            'Authorization': `Bearer ${openrouterKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 180000
+        });
+
+        const choice = response.data?.choices?.[0]?.message;
+        const content = choice?.content || choice?.reasoning_content || choice?.reasoning;
+        if (content) {
+          return content;
+        }
+      } catch (openRouterErr: any) {
+        console.error('[Backend OpenRouterClient] OpenRouter also failed:', openRouterErr?.message);
+        throw openRouterErr;
+      }
+    }
+
+    throw new Error('All backend LLM providers failed or are unconfigured');
   }
 
   static parseJson(raw: string): any {

@@ -11,6 +11,7 @@ import { useAuth } from './lib/useAuth';
 import { fetchStockData, fetchNewsAndSentiment, fetchLivePrice, searchMutualFunds, type StockData, type NewsItem, type SentimentAnalysis, type MutualFundDetails, type OptionsChainResponse } from './lib/api';
 import { Navigation } from './components/Navigation';
 import { TerminalView } from './components/TerminalView';
+import { AgentChat } from './components/AgentChat';
 import { type DevilsAdvocateResponse } from './lib/terminalService';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -142,32 +143,67 @@ const SearchSection = ({
   }, []);
 
   const fetchTickerFromName = async (query: string): Promise<string> => {
+    const trimmed = query.trim().toUpperCase();
+    if (trimmed.endsWith('.NS') || trimmed.endsWith('.BO')) {
+      return trimmed;
+    }
+
     try {
       const { getProxyUrl } = await import('./lib/api');
       const growwUrl = `https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=${encodeURIComponent(query)}&size=5&web=true`;
       const proxyGroww = getProxyUrl(growwUrl, 'groww');
       const res = await fetch(proxyGroww);
-      let data: any = {};
-      if (import.meta.env.DEV) data = await res.json(); else { const wrapperData = await res.json(); if (wrapperData?.contents) data = JSON.parse(wrapperData.contents); }
-      const content = data?.data?.content || [];
-      const stock = content.find((c: any) => c.entity_type === 'Stocks');
-      if (stock) { if (stock.nse_scrip_code) return `${stock.nse_scrip_code}.NS`; if (stock.bse_scrip_code) return `${stock.bse_scrip_code}.BO`; }
-    } catch (e) {}
+      if (res.ok) {
+        let data = await res.json();
+        if (data && typeof data === 'object' && 'contents' in data && typeof data.contents === 'string') {
+          try { data = JSON.parse(data.contents); } catch {}
+        }
+        const content = data?.data?.content || [];
+        const stock = content.find((c: any) => c.entity_type === 'Stocks' && (c.nse_scrip_code || c.bse_scrip_code));
+        if (stock) {
+          if (stock.nse_scrip_code) return `${stock.nse_scrip_code}.NS`;
+          if (stock.bse_scrip_code) return `${stock.bse_scrip_code}.BO`;
+        }
+      }
+    } catch (e) {
+      console.warn('[fetchTickerFromName] Groww search failed:', e);
+    }
+
     try {
       const { getProxyUrl } = await import('./lib/api');
       const rawUrl = `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=7&newsCount=0`;
       const proxyUrl = getProxyUrl(rawUrl, 'yahoo2');
       const response = await fetch(proxyUrl, { headers: { 'Accept': 'application/json' } });
-      let data: any = {};
-      if (import.meta.env.DEV) data = await response.json(); else { const wrapperData = await response.json(); if (wrapperData?.contents) data = JSON.parse(wrapperData.contents); }
-      const quotes = data.quotes || [];
-      if (quotes.length > 0) {
-        const indianStock = quotes.find((q: any) => { if (!q.exchange || !q.symbol) return false; const ex = q.exchange.toUpperCase(), sym = q.symbol.toUpperCase(); return ex === 'NSE' || ex === 'BSE' || sym.endsWith('.NS') || sym.endsWith('.BO'); });
-        if (indianStock) return indianStock.symbol;
-        return quotes[0].symbol.includes('.') ? quotes[0].symbol : `${quotes[0].symbol}.NS`;
+      if (response.ok) {
+        let data = await response.json();
+        if (data && typeof data === 'object' && 'contents' in data && typeof data.contents === 'string') {
+          try { data = JSON.parse(data.contents); } catch {}
+        }
+        const quotes = data.quotes || [];
+        if (quotes.length > 0) {
+          const indianStock = quotes.find((q: any) => {
+            if (!q.symbol) return false;
+            const ex = (q.exchange || q.exchDisp || '').toUpperCase();
+            const sym = q.symbol.toUpperCase();
+            return ex === 'NSE' || ex === 'NSI' || ex === 'BSE' || sym.endsWith('.NS') || sym.endsWith('.BO');
+          });
+          if (indianStock) return indianStock.symbol;
+          return quotes[0].symbol.includes('.') ? quotes[0].symbol : `${quotes[0].symbol}.NS`;
+        }
       }
-    } catch (error) {}
-    return `${query.trim().toUpperCase().replace(/\s+/g, '')}.NS`;
+    } catch (error) {
+      console.warn('[fetchTickerFromName] Yahoo search failed:', error);
+    }
+
+    try {
+      const { resolveTickerWithLLM } = await import('./lib/api');
+      const resolved = await resolveTickerWithLLM(query);
+      if (resolved) return resolved;
+    } catch (e) {
+      console.warn('[fetchTickerFromName] LLM resolver failed:', e);
+    }
+
+    return `${trimmed.replace(/\s+/g, '')}.NS`;
   };
 
   const handleAnalyze = async (overrideQuery?: string) => {
@@ -1169,6 +1205,7 @@ function App() {
         <ErrorBoundary name="Features"><FeaturesSection /></ErrorBoundary>
       </main>
       <Footer />
+      {isAuthenticated && <AgentChat />}
     </div>
   );
 }

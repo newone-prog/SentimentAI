@@ -10,68 +10,66 @@ export class AgenticLLM {
   public static async runWithTools(
     prompt: string,
     systemPrompt: string,
-    maxLoops: number = 3
+    maxLoops: number = 2
   ): Promise<string> {
-    
-    // We append instructions to the system prompt telling the LLM how to use tools
-    // Since we are forcing a JSON response in OpenRouterClient, we can teach it to return
-    // {"action": "SEARCH", "query": "reliance latest earnings"} to trigger the tool.
-const toolAwareSystemPrompt = `${systemPrompt}
+    if (maxLoops <= 0) {
+      return await OpenRouterClient.generate(prompt, systemPrompt);
+    }
 
-CRITICAL: You are an agentic AI. The data provided to you so far is SHALLOW (only headlines and numbers). 
-You MUST use your Web Scraper tool to gather deeper context, underlying causes, and recent developments BEFORE you output your final report.
+    const toolAwareSystemPrompt = `${systemPrompt}
 
-To trigger a search, output ONLY this exact JSON format (and nothing else):
+You are an agentic AI analyst. If you need additional qualitative web research, you may trigger a search:
 {
   "action": "SEARCH",
-  "query": "your search query here"
+  "query": "company name recent developments earnings"
 }
 
-To read the full text of a specific URL, output ONLY this exact JSON format:
-{
-  "action": "READ_URL",
-  "url": "https://example.com/article"
-}
-
-Do NOT output your final JSON response until you have used these tools to gather sufficient institutional-grade context.`;
+If search context is already available or you have enough information, output ONLY the final institutional-grade JSON report matching the schema.`;
 
     let currentPrompt = prompt;
     let loopCount = 0;
+    const executedQueries = new Set<string>();
 
     while (loopCount < maxLoops) {
       loopCount++;
       
       const rawResponse = await OpenRouterClient.generate(currentPrompt, toolAwareSystemPrompt);
-      let parsed;
+      let parsed: any;
       try {
         parsed = OpenRouterClient.parseJson(rawResponse);
       } catch (e) {
-        // If it failed to parse, it might not be a tool call. Just return raw.
+        return rawResponse;
+      }
+
+      // If already returning final report schema, return it immediately
+      if (parsed && (parsed.researchPaper || parsed.reasoning || parsed.overallBearCaseStrength !== undefined)) {
         return rawResponse;
       }
 
       // Check if the LLM invoked a tool
-      if (parsed && parsed.action === "SEARCH" && parsed.query) {
+      if (parsed && parsed.action === "SEARCH" && parsed.query && !executedQueries.has(parsed.query)) {
+        executedQueries.add(parsed.query);
         console.log(`[AgenticLLM] Tool Triggered: SEARCH -> ${parsed.query}`);
         const results = await AgenticScraper.search(parsed.query, 3);
         const searchContext = `[WEB SEARCH RESULTS FOR "${parsed.query}"]\n` + 
           results.map(r => `Title: ${r.title}\nLink: ${r.link}\nSnippet: ${r.snippet}\n`).join('\n') +
-          `\nBased on these results, continue your reasoning.`;
+          `\nSynthesize these findings and produce your final complete JSON report.`;
         
         currentPrompt += `\n\n[System: You searched for "${parsed.query}"]\n${searchContext}`;
-        continue; // Loop again with the new context
+        continue;
       }
 
-      if (parsed && parsed.action === "READ_URL" && parsed.url) {
+      if (parsed && parsed.action === "READ_URL" && parsed.url && !executedQueries.has(parsed.url)) {
+        executedQueries.add(parsed.url);
         console.log(`[AgenticLLM] Tool Triggered: READ_URL -> ${parsed.url}`);
         const content = await AgenticScraper.extractPageContent(parsed.url);
-        const urlContext = `[CONTENT OF ${parsed.url}]\n${content}\n\nBased on this content, continue your reasoning.`;
+        const urlContext = `[CONTENT OF ${parsed.url}]\n${content.substring(0, 1500)}\n\nSynthesize this content and produce your final complete JSON report.`;
         
         currentPrompt += `\n\n[System: You read the URL "${parsed.url}"]\n${urlContext}`;
         continue;
       }
 
-      // If no tool was invoked, this is the final answer
+      // If no valid tool was invoked, this is the final answer
       return rawResponse;
     }
 

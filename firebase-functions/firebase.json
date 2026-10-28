@@ -33,6 +33,10 @@
         "function": "api"
       },
       {
+        "source": "/llm/**",
+        "function": "api"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

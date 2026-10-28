@@ -46,52 +46,34 @@ const webScraperEndpoint = async (req, res) => {
     }
     try {
         if (type === 'daily') {
-            // Scrape Yahoo Finance Historical Data page
-            const url = `https://finance.yahoo.com/quote/${encodeURIComponent(ticker)}/history/`;
+            // Use Yahoo Chart API directly (fast, structured JSON, no header overflow)
+            const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=30d&interval=1d`;
             const response = await axios_1.default.get(url, {
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept': 'application/json'
                 }
             });
-            const $ = cheerio.load(response.data);
-            const rows = $('table tbody tr');
-            const openHistory = [];
-            const highHistory = [];
-            const lowHistory = [];
-            const closeHistory = [];
-            const volumeHistory = [];
-            rows.each((i, el) => {
-                const cells = $(el).find('td');
-                if (cells.length >= 7) {
-                    const open = parseFloat($(cells[1]).text().replace(/,/g, ''));
-                    const high = parseFloat($(cells[2]).text().replace(/,/g, ''));
-                    const low = parseFloat($(cells[3]).text().replace(/,/g, ''));
-                    const close = parseFloat($(cells[4]).text().replace(/,/g, ''));
-                    const volumeText = $(cells[6]).text().replace(/,/g, '');
-                    let volume = parseInt(volumeText, 10);
-                    if (volumeText.includes('M'))
-                        volume = parseFloat(volumeText) * 1000000;
-                    else if (volumeText.includes('B'))
-                        volume = parseFloat(volumeText) * 1000000000;
-                    if (!isNaN(open) && !isNaN(close)) {
-                        openHistory.unshift(open);
-                        highHistory.unshift(high);
-                        lowHistory.unshift(low);
-                        closeHistory.unshift(close);
-                        volumeHistory.unshift(isNaN(volume) ? 0 : volume);
-                    }
-                }
-            });
-            if (closeHistory.length === 0) {
-                throw new Error("Scraper failed to parse table data");
+            if (response.data?.chart?.error || !response.data?.chart?.result?.[0]) {
+                return res.status(404).json({
+                    success: false,
+                    error: response.data?.chart?.error?.description || "Ticker not found on exchange",
+                    code: "NOT_FOUND"
+                });
             }
-            const currentPrice = closeHistory[closeHistory.length - 1];
-            const previousPrice = closeHistory[closeHistory.length - 2] || currentPrice;
+            const result = response.data?.chart?.result?.[0];
+            const meta = result?.meta;
+            const quotes = result?.indicators?.quote?.[0];
+            const closeHistory = quotes?.close?.filter((p) => typeof p === 'number') || [];
+            const openHistory = quotes?.open?.filter((p) => typeof p === 'number') || [];
+            const highHistory = quotes?.high?.filter((p) => typeof p === 'number') || [];
+            const lowHistory = quotes?.low?.filter((p) => typeof p === 'number') || [];
+            const volumeHistory = quotes?.volume?.filter((p) => typeof p === 'number') || [];
+            const currentPrice = meta?.regularMarketPrice || closeHistory[closeHistory.length - 1] || 0;
+            const previousPrice = meta?.chartPreviousClose || closeHistory[closeHistory.length - 2] || currentPrice;
             const change = currentPrice - previousPrice;
-            const changePercent = (change / previousPrice) * 100;
-            const avgVolume = volumeHistory.reduce((a, b) => a + b, 0) / volumeHistory.length;
+            const changePercent = previousPrice ? (change / previousPrice) * 100 : 0;
+            const avgVolume = volumeHistory.length ? (volumeHistory.reduce((a, b) => a + b, 0) / volumeHistory.length) : 0;
             return res.json({
                 success: true,
                 data: {
@@ -99,7 +81,7 @@ const webScraperEndpoint = async (req, res) => {
                     price: currentPrice,
                     change: parseFloat(change.toFixed(2)),
                     changePercent: parseFloat(changePercent.toFixed(2)),
-                    currency: 'USD',
+                    currency: meta?.currency || 'USD',
                     history: closeHistory.slice(-30),
                     openHistory: openHistory.slice(-30),
                     highHistory: highHistory.slice(-30),
@@ -156,6 +138,13 @@ const webScraperEndpoint = async (req, res) => {
     }
     catch (error) {
         console.error("[WebScraper] Error:", error.message);
+        if (error.response?.status === 404) {
+            return res.status(404).json({
+                success: false,
+                error: "Ticker not found on exchange or delisted",
+                code: "NOT_FOUND"
+            });
+        }
         return res.status(500).json({ error: "Scraping failed: " + error.message });
     }
 };

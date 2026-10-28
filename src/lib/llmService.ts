@@ -12,7 +12,7 @@ export interface LLMAnalysis {
   disclaimer?: string;
 }
 
-const NVIDIA_MODEL = "meta/llama-3.1-70b-instruct";
+const NVIDIA_MODEL = "openai/gpt-oss-20b";
 const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
 
 const LLM_TIMEOUT = 300000; // 5 minutes for deep research
@@ -328,7 +328,8 @@ IMPORTANT: The "confidence" field must be an integer between 0 and 100.
     });
     if (!response.ok) throw new Error(`${label} Offline (${response.status})`);
     const data = await response.json();
-    const content = data.choices[0].message.content;
+    const choice = data.choices?.[0]?.message;
+    const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
 
     let raw = content.trim();
 
@@ -557,7 +558,7 @@ IMPORTANT: The "verdict" field must be exactly one of these three strings: "BULL
   // We will reuse the internal tryLLM approach from getDeepAnalysis.
   // Since tryLLM is scoped inside getDeepAnalysis, we'll duplicate the LLM caller block here for isolation.
   
-  const NVIDIA_MODEL = "meta/llama-3.1-70b-instruct";
+  const NVIDIA_MODEL = "openai/gpt-oss-20b";
   const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
   
   const callLLM = async (url: string, headers: Record<string, string>, body: string, label: string): Promise<LLMAnalysis> => {
@@ -576,7 +577,9 @@ IMPORTANT: The "verdict" field must be exactly one of these three strings: "BULL
       });
       if (!response.ok) throw new Error(`${label} Offline (${response.status})`);
       const data = await response.json();
-      let raw = data.choices[0].message.content.trim();
+      const choice = data.choices?.[0]?.message;
+      const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
+      let raw = content.trim();
       const codeBlockMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (codeBlockMatch) raw = codeBlockMatch[1].trim();
       const braceMatch = raw.match(/\{[\s\S]*\}/);

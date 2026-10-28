@@ -3,7 +3,7 @@ export class OpenRouterClient {
     return process.env.OPENROUTER_KEY || process.env.VITE_OPENROUTER_KEY || "";
   }
 
-  private static model = "meta-llama/llama-3.1-70b-instruct";
+  private static model = "openai/gpt-oss-20b";
 
   private static getNvidiaKey(): string {
     return process.env.NVIDIA_NIM_KEY || process.env.VITE_NVIDIA_NIM_KEY || "";
@@ -35,13 +35,14 @@ export class OpenRouterClient {
             "Accept": "application/json"
           },
           body: JSON.stringify({
-            model: "meta/llama-3.1-70b-instruct", // Nvidia NIM specific model name format
+            model: this.model,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: prompt }
             ],
             temperature: 0.1,
             max_tokens: 4096,
+            response_format: { type: "json_object" }
           })
         });
 
@@ -51,7 +52,8 @@ export class OpenRouterClient {
         }
 
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || "";
+        const choice = data.choices?.[0]?.message;
+        const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
         console.log(`[OpenRouterClient] Successfully retrieved response from NVIDIA NIM.`);
         return content.trim();
       } catch (error) {
@@ -90,7 +92,8 @@ export class OpenRouterClient {
         }
 
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || "";
+        const choice = data.choices?.[0]?.message;
+        const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
         console.log(`[OpenRouterClient] Successfully retrieved response from OpenRouter.`);
         return content.trim();
       } catch (error) {

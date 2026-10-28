@@ -18,6 +18,7 @@ export interface StockData {
   avgVolume: number;
   fiftyTwoWeekHigh?: number;
   fiftyTwoWeekLow?: number;
+  isSynthetic?: boolean;
 }
 
 export interface NewsItem {
@@ -143,22 +144,30 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeout:
   }
 };
 
-const safeJsonParse = async (res: Response, isProxied: boolean): Promise<any> => {
-  if (import.meta.env.DEV || isProxied) {
-    return await res.json();
+export const safeJsonParse = async (res: Response, _isProxied?: boolean): Promise<any> => {
+  const data = await res.json();
+  if (data && typeof data === 'object' && 'contents' in data && typeof data.contents === 'string') {
+    try {
+      return JSON.parse(data.contents);
+    } catch {
+      return data;
+    }
   }
-  const wrapper = await res.json();
-  if (wrapper?.contents) return JSON.parse(wrapper.contents);
-  throw new Error('Empty proxy response');
+  return data;
 };
 
-const resolveTickerWithLLM = async (brokenTicker: string): Promise<string | null> => {
+export const resolveTickerWithLLM = async (brokenTicker: string): Promise<string | null> => {
   try {
-    const sysPrompt = "You are an expert financial ticker resolver. The user has provided a misspelled or ambiguous company name or stock ticker. Return ONLY the correct Yahoo Finance ticker symbol for the most likely intended company (e.g. INFY.NS for Infosys, RELIANCE.NS for Reliance, AAPL for Apple). Do not return JSON. Do not include any other text. Return exactly the ticker string.";
+    const sysPrompt = "You are an expert financial ticker resolver. The user has provided a company name or ticker. Return JSON: {\"ticker\": \"RELIANCE.NS\"} with the valid Yahoo Finance ticker.";
     const prompt = `Find the Yahoo Finance ticker for: ${brokenTicker}`;
     const res = await OpenRouterClient.generate(prompt, sysPrompt);
-    const resolved = res.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
-    return resolved.length > 0 && resolved !== brokenTicker ? resolved : null;
+    let tickerCandidate = res;
+    try {
+      const parsed = JSON.parse(res);
+      if (parsed?.ticker) tickerCandidate = parsed.ticker;
+    } catch {}
+    const resolved = tickerCandidate.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
+    return resolved.length > 0 && resolved !== brokenTicker.toUpperCase() ? resolved : null;
   } catch(e) {
     console.warn("[LLM Resolver] Failed for", brokenTicker, e);
     return null;
@@ -364,39 +373,42 @@ export const fetchMarketStackData = async (ticker: string, onProgress?: (step: s
       if (eodRes.ok) {
         const eodData = await eodRes.json();
         if (eodData?.data) results.eod = eodData.data;
-      } else if (!isRetry) {
+      } else if (!isRetry && !ticker.includes('.')) {
         const fixedTicker = await resolveTickerWithLLM(ticker);
         if (fixedTicker) return fetchMarketStackData(fixedTicker, onProgress, true);
       }
     } catch (e: any) {
-      if (!isRetry) {
+      if (!isRetry && !ticker.includes('.')) {
         const fixedTicker = await resolveTickerWithLLM(ticker);
         if (fixedTicker) return fetchMarketStackData(fixedTicker, onProgress, true);
       }
     }
 
-    const splitsUrl = import.meta.env.DEV
-      ? `/api/marketstack/v1/splits?access_key=${key}&symbols=${symbol}&limit=10`
-      : `http://api.marketstack.com/v1/splits?access_key=${key}&symbols=${symbol}&limit=10`;
-    try {
-      const splitsRes = await fetchWithTimeout(splitsUrl, {}, 10000);
-      if (splitsRes.ok) {
-        const splitsData = await splitsRes.json();
-        if (splitsData?.data) results.splits = splitsData.data;
-      }
-    } catch (error) {}
+    // Corporate actions (splits & dividends) are unsupported on free tiers and return 422 for .XNSE/.XBOM
+    if (!symbol.endsWith('.XNSE') && !symbol.endsWith('.XBOM')) {
+      const splitsUrl = import.meta.env.DEV
+        ? `/api/marketstack/v1/splits?access_key=${key}&symbols=${symbol}&limit=10`
+        : `http://api.marketstack.com/v1/splits?access_key=${key}&symbols=${symbol}&limit=10`;
+      try {
+        const splitsRes = await fetchWithTimeout(splitsUrl, {}, 8000);
+        if (splitsRes.ok) {
+          const splitsData = await splitsRes.json();
+          if (splitsData?.data) results.splits = splitsData.data;
+        }
+      } catch (error) {}
 
-    const divUrl = import.meta.env.DEV
-      ? `/api/marketstack/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`
-      : `http://api.marketstack.com/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`;
-    try {
-      const divRes = await fetchWithTimeout(divUrl, {}, 10000);
-      if (divRes.ok) {
-        const divData = await divRes.json();
-        if (divData?.data) results.dividends = divData.data;
+      const divUrl = import.meta.env.DEV
+        ? `/api/marketstack/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`
+        : `http://api.marketstack.com/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`;
+      try {
+        const divRes = await fetchWithTimeout(divUrl, {}, 8000);
+        if (divRes.ok) {
+          const divData = await divRes.json();
+          if (divData?.data) results.dividends = divData.data;
+        }
+      } catch (e: any) {
+        // silent
       }
-    } catch (e: any) {
-      // silent
     }
 
     if (results.eod.length === 0 && results.splits.length === 0 && results.dividends.length === 0) {
@@ -478,9 +490,7 @@ export const fetchTradingViewSentiment = async (ticker: string): Promise<{ socia
       ]
     });
 
-    const scanUrl = import.meta.env.DEV
-      ? '/api/tradingview/india/scan'
-      : 'https://scanner.tradingview.com/india/scan';
+    const scanUrl = '/api/tradingview/india/scan';
 
     const res = await fetchWithTimeout(scanUrl, {
       method: 'POST',
@@ -520,15 +530,12 @@ export const fetchTradingViewSentiment = async (ticker: string): Promise<{ socia
 // Removed generateStableChartData function
 
 export const getProxyUrl = (targetUrl: string, apiAlias: 'yahoo1' | 'yahoo2' | 'groww' | 'mediastack') => {
-  if (import.meta.env.DEV) {
-    try {
-      const urlObj = new URL(targetUrl);
-      return `/api/${apiAlias}${urlObj.pathname}${urlObj.search}`;
-    } catch (e) {
-      return targetUrl;
-    }
+  try {
+    const urlObj = new URL(targetUrl);
+    return `/api/${apiAlias}${urlObj.pathname}${urlObj.search}`;
+  } catch (e) {
+    return `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
   }
-  return `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 };
 
 export const fetchStockData = async (ticker: string, fallbackName?: string, onProgress?: (step: string, details?: string) => void, isRetry = false): Promise<StockData | null> => {
@@ -610,13 +617,19 @@ export const fetchStockData = async (ticker: string, fallbackName?: string, onPr
         body: JSON.stringify({ type: 'daily', ticker })
       });
       
-      if (!res.ok) throw new Error("Backend Scraper Failed");
+      if (!res.ok) {
+        if (res.status === 404 && !isRetry) {
+          const fixedTicker = await resolveTickerWithLLM(ticker);
+          if (fixedTicker) return fetchStockData(fixedTicker, fallbackName, onProgress, true);
+        }
+        throw new Error(res.status === 404 ? `Symbol ${ticker} not found on exchange` : "Backend Scraper Failed");
+      }
       const result = await res.json();
       if (!result.success || !result.data) throw new Error("Scraper failed to parse");
       return result.data;
-    } catch (scrapeError) {
+    } catch (scrapeError: any) {
       console.error("Total Data Failure:", scrapeError);
-      throw new Error(`Data fetch and scraper failed for ${ticker}. Please try again later.`);
+      throw new Error(`Data fetch failed for ${ticker}. ${scrapeError.message || 'Please check ticker symbol.'}`);
     }
   }
 };

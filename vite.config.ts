@@ -41,8 +41,29 @@ export default defineConfig(({ mode }) => {
         '/api/gnews': {
           target: 'https://gnews.io',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/gnews/, '/api'),
-          secure: false
+          rewrite: (path) => path.replace(/^\/api\/gnews/, ''),
+        },
+        '/api/jina': {
+          target: 'https://r.jina.ai',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/jina/, ''),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          },
+        },
+        '/api/ddg': {
+          target: 'https://html.duckduckgo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/ddg/, ''),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'text/html',
+          },
+        },
+        '/api/mfapi': {
+          target: 'https://api.mfapi.in',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/mfapi/, ''),
         },
         '/api/mediastack': {
           target: 'https://api.mediastack.com',

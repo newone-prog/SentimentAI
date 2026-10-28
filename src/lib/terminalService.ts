@@ -21,7 +21,7 @@ export interface DevilsAdvocateResponse {
   source: string;
 }
 
-const NVIDIA_MODEL = "meta/llama-3.1-70b-instruct";
+const NVIDIA_MODEL = "openai/gpt-oss-20b";
 const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
 
 export const getDevilsAdvocateAnalysis = async (
@@ -104,7 +104,8 @@ export const getDevilsAdvocateAnalysis = async (
     if (!response.ok) throw new Error(`NVIDIA Node Error: ${response.status}`);
     
     const data = await response.json();
-    const content = data.choices[0].message.content;
+    const choice = data.choices?.[0]?.message;
+    const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     const result = JSON.parse(jsonMatch ? jsonMatch[0] : content);
     return { ...result, source: "NVIDIA Forensics Node" };
@@ -137,7 +138,8 @@ export const getDevilsAdvocateAnalysis = async (
       if (!response.ok) throw new Error(`OpenRouter Mesh Error: ${response.status}`);
 
       const data = await response.json();
-      const content = data.choices[0].message.content;
+      const choice = data.choices?.[0]?.message;
+      const content = choice?.content || choice?.reasoning_content || choice?.reasoning || "";
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       const result = JSON.parse(jsonMatch ? jsonMatch[0] : content);
       return { ...result, source: "OpenRouter Forensic Mesh" };

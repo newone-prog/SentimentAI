@@ -16,23 +16,11 @@ export class SourceDiscoveryEngine {
 
     const sources: RawSource[] = [];
 
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
     for (const query of queries) {
         const path = `/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
         
-        let proxyUrl: string;
-        let isJson = false;
-
-        // Use the built-in Vite proxy locally. This is 100% reliable and doesn't hit 3rd party rate limits.
-        if (import.meta.env.DEV) {
-          proxyUrl = `/api/googlenews${path}`;
-        } else {
-          // Fallback to allorigins in production, but add a 1.5s delay to prevent Cloudflare 520/522 block
-          proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://news.google.com${path}`)}`;
-          isJson = true;
-          await delay(1500); 
-        }
+        // Use the backend /api/googlenews reverse proxy in both DEV and PROD
+        const proxyUrl = `/api/googlenews${path}`;
         
         try {
           const response = await fetch(proxyUrl);
@@ -41,13 +29,13 @@ export class SourceDiscoveryEngine {
             continue;
           }
           
-          let xmlText = "";
-          if (isJson) {
-             const data = await response.json();
-             if (!data || !data.contents) continue;
-             xmlText = data.contents;
-          } else {
-             xmlText = await response.text();
+          const raw = await response.text();
+          let xmlText = raw;
+          if (raw.trim().startsWith('{')) {
+            try {
+              const data = JSON.parse(raw);
+              if (data?.contents) xmlText = data.contents;
+            } catch {}
           }
 
           // Parse the raw RSS XML natively
