@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "knip": "^6.24.0"
+  },
+  "_npx": {
+    "packages": [
+      "knip"
+    ]
+  }
+}

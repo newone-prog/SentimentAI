@@ -6,89 +6,139 @@ import { inspectAttr } from 'kimi-plugin-inspect-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
-  base: './',
-  plugins: [inspectAttr(), react()],
-  resolve: {
-    alias: {
-      "@": pathResolve(__dirname, "./src"),
+    base: './',
+    plugins: [inspectAttr(), react()],
+    resolve: {
+      alias: {
+        "@": pathResolve(__dirname, "./src"),
+      },
     },
-  },
-  server: {
-  headers: {
-    'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
-    'Cross-Origin-Embedder-Policy': 'unsafe-none',
-  },
-  proxy: {
-  '/api/yahoo1': {
-    target: 'https://query1.finance.yahoo.com',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/yahoo1/, ''),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': '*/*'
+    server: {
+      proxy: {
+        '/api/yahoo1': {
+          target: 'https://query1.finance.yahoo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/yahoo1/, ''),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': '*/*'
+          }
+        },
+        '/api/yahoo2': {
+          target: 'https://query2.finance.yahoo.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/yahoo2/, ''),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': '*/*'
+          }
+        },
+        '/api/groww': {
+          target: 'https://groww.in',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/groww/, '')
+        },
+        '/api/gnews': {
+          target: 'https://gnews.io',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/gnews/, '/api'),
+          secure: false
+        },
+        '/api/mediastack': {
+          target: 'https://api.mediastack.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/mediastack/, ''),
+        },
+        '/api/marketstack': {
+          target: 'http://api.marketstack.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/marketstack/, ''),
+          secure: false,
+        },
+        '/api/indianapi': {
+          target: 'https://stock.indianapi.in',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/indianapi/, ''),
+          headers: {
+            'X-API-Key': env.VITE_INDIANAPI_KEY || ''
+          }
+        },
+        '/api/tradingview': {
+          target: 'https://scanner.tradingview.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/tradingview/, ''),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Origin': 'https://www.tradingview.com',
+            'Referer': 'https://www.tradingview.com/',
+          },
+        },
+        '/api/research': {
+          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/research/, '/research'),
+          proxyTimeout: 540000,
+          timeout: 540000,
+        },
+        '/api/agentic-orchestrate': {
+          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/agentic-orchestrate/, '/agentic-orchestrate'),
+          proxyTimeout: 540000,
+          timeout: 540000,
+        },
+        '/api/trader-orchestrate': {
+          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/trader-orchestrate/, '/trader-orchestrate'),
+          proxyTimeout: 540000,
+          timeout: 540000,
+        },
+        '/api/scrape-data': {
+          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/scrape-data/, '/scrape-data'),
+          proxyTimeout: 540000,
+          timeout: 540000,
+        },
+        '/api/options-chain': {
+          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/options-chain/, '/options-chain'),
+          proxyTimeout: 120000,
+          timeout: 120000,
+        },
+        '/api/cache': {
+          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/cache/, '/cache'),
+        },
+        '/llm/nvidia': {
+          target: 'https://integrate.api.nvidia.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/llm\/nvidia/, '/v1/chat/completions'),
+          secure: false,
+          proxyTimeout: 540000,
+          timeout: 540000,
+        },
+        '/llm/openrouter': {
+          target: 'https://openrouter.ai',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/llm\/openrouter/, '/api/v1'),
+          secure: false,
+          proxyTimeout: 540000,
+          timeout: 540000,
+        },
+        '/api/googlenews': {
+          target: 'https://news.google.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/googlenews/, ''),
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Accept': '*/*'
+          }
+        },
+      }
     }
-  },
-  '/api/yahoo2': {
-    target: 'https://query2.finance.yahoo.com',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/yahoo2/, ''),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept': '*/*'
-    }
-  },
-  '/api/groww': {
-    target: 'https://groww.in',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/groww/, '')
-  },
-  '/api/gnews': {
-    target: 'https://gnews.io',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/gnews/, '/api')
-  },
-  '/api/mediastack': {
-    target: 'https://api.mediastack.com',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/mediastack/, ''),
-  },
-  '/api/marketstack': {
-    target: 'http://api.marketstack.com',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/marketstack/, ''),
-    secure: false,
-  },
-  '/api/indianapi': {
-    target: 'https://stock.indianapi.in',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/indianapi/, ''),
-    headers: {
-      'X-API-Key': env.VITE_INDIANAPI_KEY || ''
-    }
-  },
-  '/api/tradingview': {
-    target: 'https://scanner.tradingview.com',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/api\/tradingview/, ''),
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Origin': 'https://www.tradingview.com',
-      'Referer': 'https://www.tradingview.com/',
-    },
-  },
-  '/llm/nvidia': {
-    target: 'https://integrate.api.nvidia.com',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/llm\/nvidia/, '/v1/chat/completions'),
-    secure: false
-  },
-  '/llm/openrouter': {
-    target: 'https://openrouter.ai',
-    changeOrigin: true,
-    rewrite: (path) => path.replace(/^\/llm\/openrouter/, '/api/v1'),
-    secure: false
-  }
-  }
-  }
   };
 });

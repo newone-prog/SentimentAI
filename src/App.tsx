@@ -8,20 +8,21 @@ import {
 } from 'lucide-react';
 import './App.css';
 import { useAuth } from './lib/useAuth';
-import { fetchStockData, fetchNewsAndSentiment, type StockData, type NewsItem, type SentimentAnalysis } from './lib/api';
+import { fetchStockData, fetchNewsAndSentiment, fetchLivePrice, searchMutualFunds, type StockData, type NewsItem, type SentimentAnalysis, type MutualFundDetails, type OptionsChainResponse } from './lib/api';
 import { Navigation } from './components/Navigation';
 import { TerminalView } from './components/TerminalView';
+import { type DevilsAdvocateResponse } from './lib/terminalService';
 
 gsap.registerPlugin(ScrollTrigger);
 
 // Mock Data for Demo
 const mockStockData: Record<string, StockData> = {
-  'RELIANCE.NS': { name: 'Reliance Industries', price: 2950.45, change: 45.30, changePercent: 1.55, currency: 'INR', history: [], volume: [], avgVolume: 0 },
-  'TCS.NS': { name: 'Tata Consultancy Services', price: 4120.80, change: -12.40, changePercent: -0.30, currency: 'INR', history: [], volume: [], avgVolume: 0 },
-  'INFY.NS': { name: 'Infosys Limited', price: 1680.20, change: 15.60, changePercent: 0.94, currency: 'INR', history: [], volume: [], avgVolume: 0 },
-  'HDFCBANK.NS': { name: 'HDFC Bank', price: 1530.10, change: 10.20, changePercent: 0.67, currency: 'INR', history: [], volume: [], avgVolume: 0 },
-  'ICICIBANK.NS': { name: 'ICICI Bank', price: 1150.40, change: -5.30, changePercent: -0.46, currency: 'INR', history: [], volume: [], avgVolume: 0 },
-  'SBIN.NS': { name: 'State Bank of India', price: 820.60, change: 12.40, changePercent: 1.53, currency: 'INR', history: [], volume: [], avgVolume: 0 }
+  'RELIANCE.NS': { name: 'Reliance Industries', price: 2950.45, change: 45.30, changePercent: 1.55, currency: 'INR', history: [], openHistory: [], highHistory: [], lowHistory: [], volume: [], avgVolume: 0 },
+  'TCS.NS': { name: 'Tata Consultancy Services', price: 4120.80, change: -12.40, changePercent: -0.30, currency: 'INR', history: [], openHistory: [], highHistory: [], lowHistory: [], volume: [], avgVolume: 0 },
+  'INFY.NS': { name: 'Infosys Limited', price: 1680.20, change: 15.60, changePercent: 0.94, currency: 'INR', history: [], openHistory: [], highHistory: [], lowHistory: [], volume: [], avgVolume: 0 },
+  'HDFCBANK.NS': { name: 'HDFC Bank', price: 1530.10, change: 10.20, changePercent: 0.67, currency: 'INR', history: [], openHistory: [], highHistory: [], lowHistory: [], volume: [], avgVolume: 0 },
+  'ICICIBANK.NS': { name: 'ICICI Bank', price: 1150.40, change: -5.30, changePercent: -0.46, currency: 'INR', history: [], openHistory: [], highHistory: [], lowHistory: [], volume: [], avgVolume: 0 },
+  'SBIN.NS': { name: 'State Bank of India', price: 820.60, change: 12.40, changePercent: 1.53, currency: 'INR', history: [], openHistory: [], highHistory: [], lowHistory: [], volume: [], avgVolume: 0 }
 };
 
 // Grain Overlay
@@ -94,10 +95,44 @@ const HeroSection = () => {
 };
 
 // Search Section
-const SearchSection = ({ onSearch }: { onSearch: (ticker: string) => void }) => {
+const SearchSection = ({ 
+  onSearch, 
+  analysisMode, 
+  setAnalysisMode,
+  investorMode,
+  setInvestorMode
+}: { 
+  onSearch: (t: string) => void, 
+  analysisMode: 'INVESTOR' | 'TRADER',
+  setAnalysisMode: (mode: 'INVESTOR' | 'TRADER') => void,
+  investorMode: 'EQUITY' | 'MUTUAL_FUND',
+  setInvestorMode: (mode: 'EQUITY' | 'MUTUAL_FUND') => void
+}) => {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const switchRef = useRef<HTMLDivElement>(null);
+  const mfSwitchRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  useEffect(() => {
+    if (switchRef.current) {
+      gsap.to(switchRef.current, {
+        x: analysisMode === 'TRADER' ? '100%' : '0%',
+        duration: 0.4,
+        ease: 'power3.inOut'
+      });
+    }
+  }, [analysisMode]);
+
+  useEffect(() => {
+    if (mfSwitchRef.current) {
+      gsap.to(mfSwitchRef.current, {
+        x: investorMode === 'MUTUAL_FUND' ? '100%' : '0%',
+        duration: 0.4,
+        ease: 'power3.inOut'
+      });
+    }
+  }, [investorMode]);
 
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
@@ -135,53 +170,188 @@ const SearchSection = ({ onSearch }: { onSearch: (ticker: string) => void }) => 
     return `${query.trim().toUpperCase().replace(/\s+/g, '')}.NS`;
   };
 
-  const handleAnalyze = async () => {
-    if (!searchQuery) return;
+  const handleAnalyze = async (overrideQuery?: string) => {
+    const query = typeof overrideQuery === 'string' ? overrideQuery : searchQuery;
+    if (!query) return;
     setIsAnalyzing(true);
-    const resolvedTicker = await fetchTickerFromName(searchQuery);
+    
+    if (analysisMode === 'INVESTOR' && investorMode === 'MUTUAL_FUND') {
+      const mfs = await searchMutualFunds(query);
+      if (mfs && mfs.length > 0) {
+        onSearch(mfs[0].id);
+      } else {
+        alert("Mutual fund not found!");
+      }
+    } else if (analysisMode === 'TRADER') {
+      onSearch(query);
+    } else {
+      const resolvedTicker = await fetchTickerFromName(query);
+      onSearch(resolvedTicker);
+    }
+    
     setIsAnalyzing(false);
-    onSearch(resolvedTicker);
     document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
-    <section ref={sectionRef} id="analysis" className="section-flowing bg-[#F5F1EB] py-32 relative">
+    <section ref={sectionRef} id="analysis" className="section-flowing bg-[#F5F1EB] py-16 relative">
       <div className="search-content max-w-3xl mx-auto px-6 text-center">
-        <span className="section-label mb-4 block">Enter Stock or Ticker</span>
-        <h2 className="font-display text-4xl md:text-5xl mb-6 text-[#0A0A0A]">What are you analyzing today?</h2>
-        <p className="text-[#6B6B6B] mb-12 max-w-xl mx-auto">Enter a company name or stock ticker to unlock real-time sentiment analysis powered by our advanced AI engine.</p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <div className="relative w-full max-w-md">
-            <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-[#9A9A9A]" />
-            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-              placeholder="e.g., RELIANCE, TCS, or Apple" className="input-elegant pl-14" />
+        <div className="mb-10 flex flex-col items-center justify-center">
+          <span className="text-xs font-semibold uppercase tracking-widest text-[#6B6B6B] mb-3">Select Mode</span>
+          <div className="relative bg-[#EAE5DF] rounded-full p-1 w-64 h-12 flex items-center cursor-pointer shadow-inner border border-[#D5CFC6]"
+               onClick={() => setAnalysisMode(analysisMode === 'INVESTOR' ? 'TRADER' : 'INVESTOR')}>
+            <div 
+              ref={switchRef}
+              className="absolute left-1 w-[calc(50%-4px)] h-[40px] bg-white rounded-full shadow-md z-0" 
+            />
+            <div className={`relative z-10 w-1/2 text-center text-sm font-semibold transition-colors duration-300 ${analysisMode === 'INVESTOR' ? 'text-[#0A0A0A]' : 'text-[#6B6B6B]'}`}>
+              Investor
+            </div>
+            <div className={`relative z-10 w-1/2 text-center text-sm font-semibold transition-colors duration-300 ${analysisMode === 'TRADER' ? 'text-[#0A0A0A]' : 'text-[#6B6B6B]'}`}>
+              Trader
+            </div>
           </div>
-          <button onClick={handleAnalyze} disabled={isAnalyzing || !searchQuery} className="cta-button flex items-center gap-2 disabled:opacity-50">
-            {isAnalyzing ? (<>Analyzing... <Loader2 className="w-4 h-4 animate-spin" /></>) : (<>Analyze <ChevronRight className="w-4 h-4" /></>)}
-          </button>
+          
+          {analysisMode === 'INVESTOR' && (
+            <div className="mt-4 relative bg-[#F5F1EB] rounded-full p-1 w-56 h-10 flex items-center cursor-pointer shadow-sm border border-[#EAE5DF]"
+                 onClick={() => setInvestorMode(investorMode === 'EQUITY' ? 'MUTUAL_FUND' : 'EQUITY')}>
+              <div ref={mfSwitchRef} className="absolute left-1 w-[calc(50%-4px)] h-[32px] bg-white rounded-full shadow-sm z-0" />
+              <div className={`relative z-10 w-1/2 text-center text-xs font-semibold transition-colors duration-300 ${investorMode === 'EQUITY' ? 'text-[#C4A77D]' : 'text-[#9A9A9A]'}`}>Equity</div>
+              <div className={`relative z-10 w-1/2 text-center text-xs font-semibold transition-colors duration-300 ${investorMode === 'MUTUAL_FUND' ? 'text-[#C4A77D]' : 'text-[#9A9A9A]'}`}>Mutual Funds</div>
+            </div>
+          )}
         </div>
+
+        <span className="section-label mb-4 block">
+          {analysisMode === 'INVESTOR' ? 'Enter Stock, Ticker, or Fund' : 'Select Derivatives Index'}
+        </span>
+        <h2 className="font-display text-4xl md:text-5xl mb-6 text-[#0A0A0A]">
+          {analysisMode === 'INVESTOR' ? 'What are you analyzing today?' : 'Algorithmic FnO Trading'}
+        </h2>
+        <p className="text-[#6B6B6B] mb-12 max-w-xl mx-auto">
+          {analysisMode === 'INVESTOR' 
+            ? "Unlock long-term structural value analysis using global macro trends and deeply reasoned fundamentals."
+            : "Live Options Chain analysis with Black-Scholes Greeks, Put-Call Ratio (PCR), and Quantitative Derivatives Strategies."
+          }
+        </p>
+        
+        {analysisMode === 'INVESTOR' ? (
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <div className="relative w-full max-w-md">
+              <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-[#9A9A9A]" />
+              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+                placeholder={investorMode === 'MUTUAL_FUND' ? "e.g., Parag Parikh Flexi Cap" : "e.g., RELIANCE, TCS, or Apple"} className="input-elegant pl-14" />
+            </div>
+            <button onClick={() => handleAnalyze()} disabled={isAnalyzing || !searchQuery} className="cta-button flex items-center gap-2 disabled:opacity-50">
+              {isAnalyzing ? (<>Analyzing... <Loader2 className="w-4 h-4 animate-spin" /></>) : (<>Analyze <ChevronRight className="w-4 h-4" /></>)}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-row items-center justify-center gap-4 flex-wrap max-w-2xl mx-auto">
+            {['NIFTY', 'BANKNIFTY', 'FINNIFTY'].map((idx) => (
+              <button key={idx} onClick={() => { setSearchQuery(idx); handleAnalyze(idx); }} disabled={isAnalyzing} className="px-8 py-4 bg-[#F5F1EB] border border-[#EAE5DF] text-[#0A0A0A] font-semibold rounded-full hover:bg-white hover:shadow-sm transition-all duration-300 disabled:opacity-50">
+                {idx}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
 };
 
+const OrbLoading = ({ text }: { text: string }) => (
+  <div className="flex flex-col items-center justify-center py-4">
+    <div className="glass-pill">
+      <div className="glowing-orb">
+        <div className="glowing-orb-core"></div>
+      </div>
+      <span className="glass-pill-text">{text}</span>
+    </div>
+  </div>
+);
+
 // Price Action Section
-const PriceActionSection = ({ stockData }: { stockData: StockData | null }) => {
+const PriceActionSection = ({ stockData, mutualFundData, isLoading }: { stockData: StockData | null, mutualFundData?: MutualFundDetails | null, isLoading?: boolean }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
+  const [timeframe, setTimeframe] = useState<'1M' | '3M' | '6M' | '1Y' | '3Y' | '5Y' | 'MAX'>('MAX');
+  
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
-      const tl = gsap.timeline({ scrollTrigger: { trigger: sectionRef.current, start: 'top 60%' } });
-      tl.fromTo('.price-metric', { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, stagger: 0.1, ease: 'power3.out' })
-        .fromTo('.chart-box', { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.8, ease: 'power3.out' }, '-=0.4');
+      if (!isLoading && stockData) {
+        const tl = gsap.timeline({ scrollTrigger: { trigger: sectionRef.current, start: 'top 60%' } });
+        tl.fromTo('.price-metric', { x: -40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, stagger: 0.1, ease: 'power3.out' })
+          .fromTo('.chart-box', { x: 40, opacity: 0 }, { x: 0, opacity: 1, duration: 0.8, ease: 'power3.out' }, '-=0.4');
+      }
     }, sectionRef);
     return () => ctx.revert();
-  }, [stockData]);
+  }, [stockData, isLoading]);
+
+  if (isLoading) {
+    return (
+      <section ref={sectionRef} className="section-flowing bg-[#FAF8F5] py-32">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="mb-16 animate-pulse">
+            <div className="h-4 w-32 bg-[#E5E0D8] rounded mb-4"></div>
+            <div className="h-12 w-64 bg-[#E5E0D8] rounded"></div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            <div className="space-y-8 animate-pulse">
+              <div className="h-32 bg-[#E5E0D8] rounded-2xl"></div>
+              <div className="h-32 bg-[#E5E0D8] rounded-2xl"></div>
+              <div className="h-24 bg-[#E5E0D8] rounded-2xl"></div>
+            </div>
+            <div className="lg:col-span-2 chart-box h-[400px] bg-gradient-to-br from-[#F5F1EB] to-[#EAE5DF] rounded-2xl border border-black/5 flex items-center justify-center">
+              <OrbLoading text="Analyzing Price Action..." />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (!stockData) return null;
-  const isPositive = stockData.change >= 0;
   const getCurrencySymbol = (currency: string) => ({ 'USD': '$', 'INR': '₹', 'EUR': '€', 'GBP': '£' })[currency] || `${currency} `;
   const sym = getCurrencySymbol(stockData.currency || 'USD');
-  const chartPoints = stockData.history.length > 0 ? stockData.history : [stockData.price];
+  const getTimeframeDays = (tf: string) => {
+    switch (tf) {
+      case '1M': return 21;
+      case '3M': return 63;
+      case '6M': return 126;
+      case '1Y': return 252;
+      case '3Y': return 756;
+      case '5Y': return 1260;
+      default: return stockData.history.length;
+    }
+  };
+
+  const days = getTimeframeDays(timeframe);
+  const rawPoints = stockData.history.length > 0 ? stockData.history.slice(-days) : [stockData.price];
+  const chartPoints = rawPoints.length > 0 ? rawPoints : [stockData.price];
+  
+  const startPrice = chartPoints[0];
+  const endPrice = chartPoints[chartPoints.length - 1];
+  const dynamicChange = endPrice - startPrice;
+  const dynamicChangePercent = startPrice !== 0 ? (dynamicChange / startPrice) * 100 : 0;
+  
+  let displayChangePercent = stockData.changePercent;
+  let isCAGR = false;
+  if (mutualFundData && mutualFundData.returns) {
+    const r = mutualFundData.returns;
+    switch (timeframe) {
+      case '1M': displayChangePercent = r.return1m ?? dynamicChangePercent; break;
+      case '3M': displayChangePercent = r.return3m ?? dynamicChangePercent; break;
+      case '6M': displayChangePercent = r.return6m ?? dynamicChangePercent; break;
+      case '1Y': displayChangePercent = r.return1y ?? dynamicChangePercent; isCAGR = true; break;
+      case '3Y': displayChangePercent = r.return3y ?? dynamicChangePercent; isCAGR = true; break;
+      case '5Y': displayChangePercent = r.return5y ?? dynamicChangePercent; isCAGR = true; break;
+      case 'MAX': displayChangePercent = r.return_since_created ?? dynamicChangePercent; isCAGR = true; break;
+    }
+  }
+
+  const isPositive = displayChangePercent >= 0;
+  
+  const timeframeLabel = timeframe === 'MAX' ? 'All Time' : timeframe;
   const minPrice = Math.min(...chartPoints);
   const maxPrice = Math.max(...chartPoints);
   const range = maxPrice - minPrice || 1;
@@ -194,17 +364,6 @@ const PriceActionSection = ({ stockData }: { stockData: StockData | null }) => {
         <div className="mb-16">
           <span className="section-label mb-4 block">Price Action</span>
           <h2 className="font-display text-4xl md:text-5xl text-[#0A0A0A]">Market Performance</h2>
-          {stockData.isSynthetic === true && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 max-w-2xl">
-              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="text-sm font-medium text-red-800">Synthesized Demo Data</h4>
-                <p className="text-xs text-red-600 mt-1 leading-relaxed">
-                  Live market data is currently unavailable for <strong>{stockData.name}</strong>. The charts and metrics shown are simulated for demonstration purposes. Please verify with actual market data before making any investment decisions.
-                </p>
-              </div>
-            </div>
-          )}
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           <div className="space-y-8">
@@ -215,9 +374,9 @@ const PriceActionSection = ({ stockData }: { stockData: StockData | null }) => {
             <div className="price-metric metric-card">
               <div className={`metric-value flex items-center gap-3 ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
                 {isPositive ? <TrendingUp className="w-8 h-8" /> : <TrendingDown className="w-8 h-8" />}
-                {isPositive ? '+' : ''}{stockData.changePercent.toFixed(2)}%
+                {isPositive ? '+' : ''}{displayChangePercent.toFixed(2)}%
               </div>
-              <div className="metric-label">24h Change</div>
+              <div className="metric-label">{mutualFundData ? `${timeframeLabel} Return ${isCAGR ? '(CAGR)' : ''}` : '24h Return'}</div>
             </div>
             {stockData.fiftyTwoWeekHigh && stockData.fiftyTwoWeekLow && (
               <div className="price-metric metric-card grid grid-cols-2 gap-4 border-t border-[#E5E0D8] pt-6 mt-6">
@@ -226,8 +385,25 @@ const PriceActionSection = ({ stockData }: { stockData: StockData | null }) => {
               </div>
             )}
           </div>
-          <div className="chart-box lg:col-span-2 chart-container">
-            <div className="relative h-64 md:h-80">
+          <div className="chart-box lg:col-span-2 chart-container flex flex-col">
+            {mutualFundData && (
+              <div className="flex flex-wrap gap-2 mb-4 justify-end">
+                {(['1M', '3M', '6M', '1Y', '3Y', '5Y', 'MAX'] as const).map(tf => (
+                  <button
+                    key={tf}
+                    onClick={() => setTimeframe(tf)}
+                    className={`px-3 py-1 rounded text-xs font-mono transition-colors ${
+                      timeframe === tf 
+                        ? 'bg-[#C4A77D] text-black font-semibold' 
+                        : 'bg-black/5 text-[#6B6B6B] hover:bg-black/10'
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="relative h-64 md:h-80 w-full mt-auto">
               <svg viewBox="0 0 100 100" className="w-full h-full" preserveAspectRatio="none">
                 <path d={areaPath} fill={isPositive ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)'} />
                 <path d={svgPath} fill="none" stroke={isPositive ? '#22C55E' : '#EF4444'} strokeWidth="0.5" />
@@ -241,15 +417,42 @@ const PriceActionSection = ({ stockData }: { stockData: StockData | null }) => {
 };
 
 // Market Narrative Section
-const MarketNarrativeSection = ({ stockName, newsList }: { stockName: string; newsList: NewsItem[] }) => {
+const MarketNarrativeSection = ({ stockName, newsList, isLoading }: { stockName?: string; newsList?: NewsItem[], isLoading?: boolean }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const ctx = gsap.context(() => {
-      gsap.fromTo('.narrative-header', { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out', scrollTrigger: { trigger: sectionRef.current, start: 'top 60%' } });
-      if (newsList && newsList.length > 0) gsap.fromTo('.news-item-anim', { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, stagger: 0.08, ease: 'power3.out', scrollTrigger: { trigger: '.news-list', start: 'top 70%' } });
+      if (!isLoading) {
+        gsap.fromTo('.narrative-header', { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.8, ease: 'power3.out', scrollTrigger: { trigger: sectionRef.current, start: 'top 60%' } });
+        if (newsList && newsList.length > 0) gsap.fromTo('.news-item-anim', { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.5, stagger: 0.08, ease: 'power3.out', scrollTrigger: { trigger: '.news-list', start: 'top 70%' } });
+      }
     }, sectionRef);
     return () => ctx.revert();
-  }, [newsList]);
+  }, [newsList, isLoading]);
+
+  if (isLoading) {
+    return (
+      <section ref={sectionRef} className="section-flowing bg-white py-32 border-y border-[#E5E0D8]">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="mb-16 animate-pulse">
+            <div className="h-4 w-32 bg-[#F5F1EB] rounded mb-4"></div>
+            <div className="h-12 w-64 bg-[#F5F1EB] rounded"></div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+            <div className="lg:col-span-7 space-y-4 animate-pulse">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-28 bg-[#F5F1EB] rounded-2xl"></div>
+              ))}
+            </div>
+            <div className="lg:col-span-5 h-[400px] bg-gradient-to-br from-[#F5F1EB] to-[#EAE5DF] rounded-2xl flex items-center justify-center">
+               <OrbLoading text="Scanning Global Narratives..." />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!newsList || newsList.length === 0) return null;
 
   const getBadgeClass = (category: string) => { switch (category) { case 'Positive': return 'badge-pos'; case 'Negative': return 'badge-neg'; default: return 'badge-neu'; } };
 
@@ -325,14 +528,39 @@ const ResearchDialog = ({ isOpen, onClose, researchPaper, stockName, source }: {
 
   if (!isOpen) return null;
 
-  const renderPaper = (text: string) => {
-    const sections = text.split(/={3}\s*/);
+  const renderPaper = (text: any) => {
+    let processText = typeof text === 'string' ? text : '';
+    if (typeof text === 'object' && text !== null) {
+      if (Array.isArray(text)) {
+        processText = text.join('\n\n');
+      } else {
+        processText = Object.entries(text).map(([k, v]) => `### ${k}\n${v}`).join('\n\n');
+      }
+    } else if (typeof text !== 'string') {
+      processText = String(text || '');
+    }
+    
+    const splitRegex = processText.includes('###') ? /(?:^|\n)###\s+/ : /={3}\s*/;
+    const sections = processText.split(splitRegex);
     return sections.filter(s => s.trim()).map((section, i) => {
       const lines = section.trim().split('\n');
-      const title = lines[0].replace(/\s*={1,2}\s*/g, '').trim();
+      let title = lines[0].replace(/\s*={1,3}\s*/g, '').trim();
+      title = title.replace(/\*\*/g, ''); // Remove bold asterisks from title
       const body = lines.slice(1).join('\n').trim();
       if (!title && !body) return null;
-      return (<div key={i} className="research-section mb-6">{title && <h3 className="research-section-title">{title}</h3>}{body && body.split('\n').filter(Boolean).map((p, j) => (<p key={j} className="research-paragraph">{p.trim()}</p>))}</div>);
+      return (
+        <div key={i} className="research-section mb-6">
+          {title && <h3 className="research-section-title font-bold text-[#0A0A0A]">{title}</h3>}
+          {body && body.split('\n').filter(Boolean).map((p, j) => {
+            const parts = p.trim().split(/(\*\*.*?\*\*)/g);
+            return (
+              <p key={j} className="research-paragraph">
+                {parts.map((part, k) => part.startsWith('**') && part.endsWith('**') ? <strong key={k} className="font-bold text-[#0A0A0A]">{part.slice(2, -2)}</strong> : part)}
+              </p>
+            );
+          })}
+        </div>
+      );
     });
   };
 
@@ -349,7 +577,7 @@ const ResearchDialog = ({ isOpen, onClose, researchPaper, stockName, source }: {
         </div>
         <div className="research-dialog-source"><Sparkles className="w-3 h-3 text-[#C4A77D]" /><span>AI Engine: {source}</span></div>
         <div ref={scrollRef} className="research-dialog-body">{renderPaper(researchPaper)}</div>
-        <div className="research-dialog-footer">
+<div className="research-dialog-footer">
           <p className="text-[10px] text-[#9A9A9A] font-mono uppercase tracking-wider leading-relaxed">AI-generated research. Data sourced from Yahoo Finance, TradingView Scanner, MarketStack, Indian Stock API, GNews & MediaStack APIs. Not financial advice. Invest at your own risk.</p>
         </div>
       </div>
@@ -357,14 +585,16 @@ const ResearchDialog = ({ isOpen, onClose, researchPaper, stockName, source }: {
   );
 };
 
-const FinalVerdictSection = ({ stockName, sentimentStats, stockData }: { stockName: string; sentimentStats: SentimentAnalysis | null; stockData: StockData | null }) => {
+
+const FinalVerdictSection = ({ ticker, stockName, sentimentStats, stockData, analysisMode, mutualFundData, optionsChainData, onOpenTerminal, setDaCache }: { ticker: string; stockName: string; sentimentStats: SentimentAnalysis | null; stockData: StockData | null; analysisMode: 'INVESTOR' | 'TRADER' | 'MUTUAL_FUND'; mutualFundData?: MutualFundDetails; optionsChainData?: OptionsChainResponse | null; onOpenTerminal: (q: string) => void; setDaCache: (da: DevilsAdvocateResponse | null) => void; }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
   const verdictRef = useRef<HTMLDivElement>(null);
-  const [aiVerdict, setAiVerdict] = useState<"BULLISH" | "BEARISH" | "NEUTRAL">("NEUTRAL");
-  const [verdictClass, setVerdictClass] = useState<"verdict-bullish" | "verdict-bearish" | "verdict-neutral">("verdict-neutral");
+  const [aiVerdict, setAiVerdict] = useState<"BULLISH" | "BEARISH" | "NEUTRAL" | "SIDEWAYS">("NEUTRAL");
+  const [verdictClass, setVerdictClass] = useState<"verdict-bullish" | "verdict-bearish" | "verdict-neutral" | "verdict-sideways">("verdict-neutral");
   const [isProcessing, setIsProcessing] = useState(true);
-  const [llmAnalysis, setLlmAnalysis] = useState<{ reasoning: string; source: string; confidence: number; emotionalContext?: string; disclaimer?: string; researchPaper?: string } | null>(null);
+  const [llmAnalysis, setLlmAnalysis] = useState<{ reasoning: string; source: string; confidence: number; emotionalContext?: string; disclaimer?: string; researchPaper?: string; optionSignals?: any[] } | null>(null);
   const [showResearch, setShowResearch] = useState(false);
+  const [daGlimpse, setDaGlimpse] = useState<string>("");
 
   const truncateReasoning = (text: string, maxLines: number = 6): string => { const lines = text.split(/\.\s+/); if (lines.length <= maxLines) return text; return lines.slice(0, maxLines).join('. ') + '.'; };
   const reasoningText = llmAnalysis?.reasoning ? truncateReasoning(llmAnalysis.reasoning) : '';
@@ -382,48 +612,72 @@ const FinalVerdictSection = ({ stockName, sentimentStats, stockData }: { stockNa
     const controller = new AbortController();
 
     const computeAI = async () => {
+      if (!stockData || !sentimentStats) return;
       setIsProcessing(true);
-      if (stockData) {
-        try {
-          const { analyzeStock } = await import('./brain/ensembleModel');
-          const { getDeepAnalysis } = await import('./lib/llmService');
-          const [ensembleSettled, deepSettled] = await Promise.allSettled([
-            analyzeStock(stockData, sentimentStats),
-            getDeepAnalysis(stockName, stockData, sentimentStats, controller.signal)
-          ]);
-          
-          if (!mounted) return;
+      try {
+        if (analysisMode === 'TRADER') {
+            const { TraderOrchestratorService } = await import('./lib/orchestrator/TraderOrchestratorService');
+            const onProgress = () => {};
+            const result = await TraderOrchestratorService.executeAlgorithmicTradeAnalysis(ticker, stockName, onProgress, optionsChainData);
+            
+            if (!mounted) return;
+            
+            const verdict = (result?.data?.verdict || 'NEUTRAL').replace(/\s+/g, '_');
+            setAiVerdict(verdict as any);
+            setVerdictClass(`verdict-${verdict.toLowerCase()}` as any);
+            
+            setLlmAnalysis({
+              reasoning: result?.data?.reasoning || 'Trader analysis complete.',
+              source: 'Algorithmic Trading Orchestrator',
+              confidence: result?.data?.confidence || 90,
+              emotionalContext: result?.data?.emotionalContext || 'Technical Analysis Mode',
+              researchPaper: result?.data?.researchPaper || '',
+              disclaimer: 'Algorithmic analysis. Not financial advice.',
+              optionSignals: result?.data?.optionSignals || []
+            });
+          } else {
+            const { analyzeStock } = await import('./brain/ensembleModel');
+            const { getAgenticParallelAnalysis } = await import('./lib/llmService');
+            const [ensembleSettled, deepSettled] = await Promise.allSettled([
+              analyzeStock(stockData, sentimentStats),
+              getAgenticParallelAnalysis(stockName, stockData, sentimentStats, undefined, mutualFundData)
+            ]);
+            
+            if (!mounted) return;
 
-          const ensembleResult = ensembleSettled.status === 'fulfilled' ? ensembleSettled.value : { verdict: 'NEUTRAL' as const, verdictClass: 'verdict-neutral' as const, finalScore: 0, confidence: 0 };
-          const deepResult = deepSettled.status === 'fulfilled' ? deepSettled.value : { reasoning: 'LLM analysis unavailable', verdict: 'NEUTRAL' as const, confidence: 0, source: 'Local Baseline Engine', emotionalContext: 'Disconnected', researchPaper: '', disclaimer: 'AI-generated analysis. Not financial advice.' };
-          
-          const llmIsFallback = deepResult.confidence <= 0 || deepResult.source === 'Local Baseline Engine';
-          let verdict: "BULLISH" | "BEARISH" | "NEUTRAL";
-          let vClass: "verdict-bullish" | "verdict-bearish" | "verdict-neutral";
-          if (llmIsFallback) { verdict = ensembleResult.verdict; vClass = ensembleResult.verdictClass; }
-          else if (deepResult.verdict === ensembleResult.verdict) { verdict = deepResult.verdict; vClass = `verdict-${verdict.toLowerCase()}` as any; }
-          else if (ensembleResult.finalScore > 0.15 || ensembleResult.finalScore < -0.15) { verdict = ensembleResult.verdict; vClass = ensembleResult.verdictClass; }
-          else { verdict = deepResult.verdict; vClass = `verdict-${verdict.toLowerCase()}` as any; }
-          
-          setAiVerdict(verdict); setVerdictClass(vClass);
-          setLlmAnalysis({ reasoning: deepResult.reasoning, source: deepResult.source, confidence: Math.max(0, Math.min(100, deepResult.confidence)), emotionalContext: deepResult.emotionalContext, disclaimer: (deepResult as any).disclaimer, researchPaper: deepResult.researchPaper });
+            const ensembleResult = ensembleSettled.status === 'fulfilled' ? ensembleSettled.value : { verdict: 'NEUTRAL' as const, verdictClass: 'verdict-neutral' as const, finalScore: 0, confidence: 0 };
+            const deepResult = deepSettled.status === 'fulfilled' ? deepSettled.value.research : { reasoning: 'LLM analysis unavailable', verdict: 'NEUTRAL' as const, confidence: 0, source: 'Local Baseline Engine', emotionalContext: 'Disconnected', researchPaper: '', disclaimer: 'AI-generated analysis. Not financial advice.' };
+            
+            if (deepSettled.status === 'fulfilled' && deepSettled.value.devilsAdvocate) {
+                setDaGlimpse(deepSettled.value.devilsAdvocate.bearishSummary);
+                setDaCache(deepSettled.value.devilsAdvocate);
+            }
+            
+            const llmIsFallback = deepResult.confidence <= 0 || deepResult.source === 'Local Baseline Engine';
+            let verdict: "BULLISH" | "BEARISH" | "NEUTRAL" | "SIDEWAYS";
+            let vClass: "verdict-bullish" | "verdict-bearish" | "verdict-neutral" | "verdict-sideways";
+            if (llmIsFallback) { verdict = ensembleResult.verdict; vClass = ensembleResult.verdictClass; }
+            else { verdict = deepResult.verdict; vClass = `verdict-${verdict.toLowerCase()}` as any; }
+            
+            setAiVerdict(verdict); setVerdictClass(vClass);
+            setLlmAnalysis({ reasoning: deepResult.reasoning, source: deepResult.source || "Agentic Web Scraper", confidence: Math.max(0, Math.min(100, deepResult.confidence)), emotionalContext: deepResult.emotionalContext, disclaimer: (deepResult as any).disclaimer, researchPaper: deepResult.researchPaper });
+          }
         } catch (error) {
           console.error('[App] computeAI error:', error);
         } finally {
           if (mounted) setIsProcessing(false);
         }
-      } else { 
-        if (mounted) setIsProcessing(false); 
-      }
     };
     computeAI();
     return () => { 
       mounted = false; 
       controller.abort();
     };
-  }, [stockData, sentimentStats, stockName]);
+    // Exclude stockData to prevent infinite loop on real-time price ticks
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sentimentStats, stockName, analysisMode]);
 
-  const confidence = llmAnalysis?.confidence || 50;
+  const confidence = Number(llmAnalysis?.confidence) || 50;
 
   return (
     <section ref={sectionRef} className="section-flowing bg-[#0A0A0A] py-32 relative overflow-hidden">
@@ -434,12 +688,82 @@ const FinalVerdictSection = ({ stockName, sentimentStats, stockData }: { stockNa
           <div className="w-24 h-1 bg-gradient-to-r from-transparent via-green-500 to-transparent mx-auto mb-4" />
           <div className="text-white/60 text-sm font-mono mb-8 uppercase tracking-[0.2em]">Behavioral Pulse: {llmAnalysis?.emotionalContext || 'Analyzing Crowds...'}</div>
           {isProcessing ? (
-            <div className="flex flex-col items-center gap-4"><div className="w-12 h-12 border-4 border-[#C4A77D]/30 border-t-[#C4A77D] rounded-full animate-spin" /><p className="text-white/50 animate-pulse">Decoding Human Behavior & Trends...</p></div>
+            <OrbLoading text="Decoding Human Behavior & Trends..." />
           ) : (<>
             <p className="text-white/90 text-lg md:text-xl font-medium mb-6 leading-relaxed italic">"{reasoningText}"</p>
             {llmAnalysis?.researchPaper && <button onClick={() => setShowResearch(true)} className="read-more-btn"><BookOpen className="w-4 h-4" />Read Full Research</button>}
             {llmAnalysis?.disclaimer && <p className="text-red-400/60 text-[10px] mt-4 mb-6 uppercase tracking-widest font-mono">⚠ {llmAnalysis.disclaimer}</p>}
             <div className="text-[#C4A77D] text-sm font-mono flex items-center justify-center gap-2"><Sparkles className="w-4 h-4" />RAG Engine: {llmAnalysis?.source}</div>
+            
+            {/* Options Signals Carousel */}
+            {analysisMode === 'TRADER' && llmAnalysis?.optionSignals && llmAnalysis.optionSignals.length > 0 && (
+              <div className="mt-12 w-full text-left">
+                <div className="flex items-center gap-2 mb-4">
+                  <Activity className="w-5 h-5 text-green-400" />
+                  <h4 className="text-white/90 font-display text-lg">AI Option Signals</h4>
+                </div>
+                <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 hide-scrollbar">
+                  {llmAnalysis.optionSignals.map((sig, idx) => (
+                    <div key={idx} className="snap-center shrink-0 w-80 md:w-96 bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-md">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <span className={`inline-block px-2 py-1 rounded text-xs font-bold font-mono tracking-wider ${sig.type.includes('BUY') ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
+                            {sig.type}
+                          </span>
+                          <span className="ml-2 inline-block px-2 py-1 rounded text-xs font-mono bg-blue-500/20 text-blue-400">
+                            {sig.moneyness}
+                          </span>
+                        </div>
+                        <div className="text-xl font-mono text-white">{sig.strike}</div>
+                      </div>
+                      <p className="text-sm text-white/70 italic mb-4 line-clamp-3">"{sig.rationale}"</p>
+                      <div className="grid grid-cols-3 gap-2 mb-4 text-center font-mono text-xs">
+                        <div className="bg-white/5 p-2 rounded">
+                          <div className="text-white/40 mb-1">ENTRY</div>
+                          <div className="text-white">₹{sig.entry}</div>
+                        </div>
+                        <div className="bg-red-500/10 p-2 rounded border border-red-500/20">
+                          <div className="text-red-400/60 mb-1">SL</div>
+                          <div className="text-red-400">₹{sig.stopLoss}</div>
+                        </div>
+                        <div className="bg-green-500/10 p-2 rounded border border-green-500/20">
+                          <div className="text-green-400/60 mb-1">TARGET</div>
+                          <div className="text-green-400">₹{sig.takeProfit}</div>
+                        </div>
+                      </div>
+                      {sig.greeks && (
+                        <div className="border-t border-white/10 pt-3 flex justify-between text-[10px] font-mono text-white/50 uppercase">
+                          <span>Δ: {sig.greeks.delta}</span>
+                          <span className={sig.greeks.gamma > 0.05 ? 'text-yellow-400' : ''}>Γ: {sig.greeks.gamma}</span>
+                          <span className="text-red-400">Θ: {sig.greeks.theta}</span>
+                          <span>V: {sig.greeks.vega}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Devil's Advocate Glimpse */}
+            <div className="mt-12 pt-8 border-t border-white/10 text-left">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-red-500" />
+                  <h4 className="text-white/80 font-display text-lg">Devil's Advocate</h4>
+                </div>
+                <button 
+                  onClick={() => onOpenTerminal(`Analyze the downside risks and bear case for ${stockName}`)}
+                  className="px-4 py-2 bg-red-950/30 text-red-400 border border-red-900/50 rounded-lg hover:bg-red-900/50 hover:text-white transition-colors text-xs font-mono uppercase tracking-widest flex items-center gap-2 group whitespace-nowrap"
+                >
+                  <Activity className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  View Deep Analysis in Terminal
+                </button>
+              </div>
+              <p className="text-white/50 text-sm font-mono leading-relaxed border-l-2 border-red-500/30 pl-4 italic">
+                "{daGlimpse || `Our independent red-team engine has scanned for structural weaknesses, hidden institutional offloading, and structural breakdown scenarios for ${stockName}...`}"
+              </p>
+            </div>
           </>)}
         </div>
         <div className="mt-16 grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -478,6 +802,98 @@ const FeaturesSection = () => {
               <p className="text-[#6B6B6B] leading-relaxed">{f.description}</p>
             </div>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
+const OptionsChainSection = ({ optionsChainData }: { optionsChainData: OptionsChainResponse | null }) => {
+  if (!optionsChainData || !optionsChainData.chain) return null;
+
+  return (
+    <section className="py-20 bg-white border-t border-[#EAE5DF]">
+      <div className="max-w-7xl mx-auto px-6">
+        <h3 className="text-2xl font-display mb-6">FnO Options Chain</h3>
+        
+        <div className="flex gap-8 mb-8 text-sm">
+          <div className="bg-[#F5F1EB] p-4 rounded-xl border border-[#EAE5DF]">
+            <div className="text-[#6B6B6B] mb-1">Underlying Spot</div>
+            <div className="font-mono text-xl">{optionsChainData.underlying}</div>
+          </div>
+          <div className="bg-[#F5F1EB] p-4 rounded-xl border border-[#EAE5DF]">
+            <div className="text-[#6B6B6B] mb-1">Put-Call Ratio (PCR)</div>
+            <div className={`font-mono text-xl ${optionsChainData.pcr > 1.2 ? 'text-green-600' : optionsChainData.pcr < 0.8 ? 'text-red-600' : ''}`}>
+              {optionsChainData.pcr.toFixed(2)}
+            </div>
+          </div>
+          <div className="bg-[#F5F1EB] p-4 rounded-xl border border-[#EAE5DF]">
+            <div className="text-[#6B6B6B] mb-1">Expiry Date</div>
+            <div className="font-mono text-xl">{optionsChainData.expiryDate}</div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-[#EAE5DF]">
+          <table className="w-full text-sm font-mono text-right border-collapse">
+            <thead>
+              <tr className="bg-[#F5F1EB] text-[#6B6B6B]">
+                <th className="p-3 border-r border-[#EAE5DF]" colSpan={8}>CALLS (CE)</th>
+                <th className="p-3 border-r border-[#EAE5DF] text-center" rowSpan={2}>STRIKE</th>
+                <th className="p-3" colSpan={8}>PUTS (PE)</th>
+              </tr>
+              <tr className="bg-white text-[#6B6B6B] text-xs">
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Rho</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Vega</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Theta</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Gamma</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Delta</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">OI</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">IV</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">LTP</th>
+                
+                <th className="p-2 border-r border-[#EAE5DF] border-b">LTP</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">IV</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">OI</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Delta</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Gamma</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Theta</th>
+                <th className="p-2 border-r border-[#EAE5DF] border-b">Vega</th>
+                <th className="p-2 border-b border-[#EAE5DF]">Rho</th>
+              </tr>
+            </thead>
+            <tbody>
+              {optionsChainData.chain.map((row: any) => {
+                const ce = row.CE;
+                const pe = row.PE;
+                return (
+                  <tr key={row.strikePrice} className={`border-b border-[#EAE5DF] hover:bg-[#F5F1EB] transition-colors ${row.isATM ? 'bg-[#FDF8EC] font-bold' : ''}`}>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.greeks.rho.toFixed(2) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.greeks.vega.toFixed(2) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.greeks.theta.toFixed(2) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.greeks.gamma.toFixed(4) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.greeks.delta.toFixed(2) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.oi || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.iv ? ce.iv.toFixed(1) : '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] font-bold ${row.strikePrice < optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{ce?.ltp || '-'}</td>
+                    
+                    <td className="p-2 border-r border-[#EAE5DF] text-center bg-[#F5F1EB] text-black">
+                      {row.isATM ? <span className="px-2 py-0.5 bg-yellow-200 rounded text-xs mr-2">ATM</span> : null} 
+                      {row.strikePrice}
+                    </td>
+
+                    <td className={`p-2 border-r border-[#EAE5DF] font-bold ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.ltp || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.iv ? pe.iv.toFixed(1) : '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.oi || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.greeks.delta.toFixed(2) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.greeks.gamma.toFixed(4) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.greeks.theta.toFixed(2) || '-'}</td>
+                    <td className={`p-2 border-r border-[#EAE5DF] ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.greeks.vega.toFixed(2) || '-'}</td>
+                    <td className={`p-2 ${row.strikePrice > optionsChainData.underlying ? 'bg-yellow-50/50' : ''}`}>{pe?.greeks.rho.toFixed(2) || '-'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
@@ -531,29 +947,61 @@ const Footer = () => (
 // ─── MAIN APP ───
 function App() {
   const [view, setView] = useState<'main' | 'terminal'>('main');
-  const [selectedTicker, setSelectedTicker] = useState('RELIANCE.NS');
+  const [terminalInitialQuery, setTerminalInitialQuery] = useState<string>('');
+  const [analysisMode, setAnalysisMode] = useState<'INVESTOR' | 'TRADER'>('INVESTOR');
+  const [investorMode, setInvestorMode] = useState<'EQUITY' | 'MUTUAL_FUND'>('EQUITY');
+  const [selectedTicker, setSelectedTicker] = useState<string | null>(null);
   const [stockData, setStockData] = useState<StockData | null>(null);
+  const [mutualFundData, setMutualFundData] = useState<MutualFundDetails | null>(null);
+  const [mutualFundHistory, setMutualFundHistory] = useState<number[]>([]);
   const [sentimentStats, setSentimentStats] = useState<SentimentAnalysis | null>(null);
-  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [optionsChainData, setOptionsChainData] = useState<OptionsChainResponse | null>(null);
+  const [isDataLoading, setIsDataLoading] = useState(false);
+  const [daCache, setDaCache] = useState<DevilsAdvocateResponse | null>(null);
   const { user, loading: authLoading, isAuthenticated, login, logout } = useAuth();
 
   // FIX #1: Only fetch data if user is authenticated
   useEffect(() => {
     const loadData = async () => {
+      if (!selectedTicker) return;
       setIsDataLoading(true);
+      setStockData(null);
+      setMutualFundData(null);
+      setSentimentStats(null);
+      setOptionsChainData(null);
+      setDaCache(null);
+      
       if (!isAuthenticated) {
-        setStockData(null);
-        setSentimentStats(null);
         setIsDataLoading(false);
         return;
       }
 
       try {
-        const fallbackName = mockStockData[selectedTicker]?.name || selectedTicker.split('.')[0];
-        const sData = await fetchStockData(selectedTicker, fallbackName);
-        setStockData(sData);
-        const nData = await fetchNewsAndSentiment(selectedTicker, sData?.name);
-        setSentimentStats(nData);
+        if (investorMode === 'MUTUAL_FUND') {
+          const { fetchMutualFundDetails, fetchMutualFundNews, fetchMutualFundHistory } = await import('./lib/api');
+          const mData = await fetchMutualFundDetails(selectedTicker);
+          setMutualFundData(mData);
+          if (mData) {
+             const [nData, hData] = await Promise.all([
+               fetchMutualFundNews(mData.schemeName),
+               mData.schemeCode ? fetchMutualFundHistory(mData.schemeCode) : Promise.resolve([])
+             ]);
+             setSentimentStats(nData);
+             setMutualFundHistory(hData);
+          }
+        } else {
+          const fallbackName = mockStockData[selectedTicker]?.name || selectedTicker.split('.')[0];
+          const sData = await fetchStockData(selectedTicker, fallbackName);
+          setStockData(sData);
+          const nData = await fetchNewsAndSentiment(selectedTicker, sData?.name);
+          setSentimentStats(nData);
+
+          if (analysisMode === 'TRADER' && ['NIFTY', 'BANKNIFTY', 'FINNIFTY'].includes(selectedTicker)) {
+            const { fetchOptionsChain } = await import('./lib/api');
+            const chainData = await fetchOptionsChain(selectedTicker);
+            setOptionsChainData(chainData);
+          }
+        }
       } catch (error) {
         console.error('[App] loadData failed:', error);
       } finally {
@@ -563,6 +1011,53 @@ function App() {
 
     if (!authLoading) loadData();
   }, [selectedTicker, isAuthenticated, authLoading]);
+
+  // FIX #2: Poll for real-time tick-by-tick prices (only for Equity)
+  useEffect(() => {
+    if (!selectedTicker || isDataLoading || !stockData || !isAuthenticated || investorMode === 'MUTUAL_FUND') return;
+
+    const intervalId = setInterval(async () => {
+      try {
+        const liveData = await fetchLivePrice(selectedTicker);
+        if (liveData) {
+          setStockData(prev => {
+            if (!prev) return prev;
+            if (prev.price === liveData.price && prev.change === liveData.change) return prev;
+            return {
+              ...prev,
+              price: liveData.price,
+              change: liveData.change,
+              changePercent: liveData.changePercent,
+            };
+          });
+        }
+      } catch (e) {
+        // silent fail on polling
+      }
+    }, 5000);
+
+    return () => clearInterval(intervalId);
+  }, [selectedTicker, isDataLoading, stockData?.name, isAuthenticated]);
+
+  let mfMockStockData: StockData | null = null;
+  if (investorMode === 'MUTUAL_FUND' && mutualFundData) {
+    const hasHistory = mutualFundHistory && mutualFundHistory.length > 1;
+    mfMockStockData = {
+      name: mutualFundData.schemeName,
+      price: mutualFundData.nav,
+      change: mutualFundData.nav * (mutualFundData.returns?.return1y || 0) / 100,
+      changePercent: mutualFundData.returns?.return1y || 0,
+      currency: 'INR',
+      history: hasHistory ? mutualFundHistory : [mutualFundData.nav * 0.8, mutualFundData.nav * 0.9, mutualFundData.nav * 0.85, mutualFundData.nav * 1.05, mutualFundData.nav],
+      openHistory: hasHistory ? mutualFundHistory : [mutualFundData.nav * 0.8, mutualFundData.nav * 0.9, mutualFundData.nav * 0.85, mutualFundData.nav * 1.05, mutualFundData.nav],
+      highHistory: hasHistory ? mutualFundHistory : [mutualFundData.nav * 0.8, mutualFundData.nav * 0.9, mutualFundData.nav * 0.85, mutualFundData.nav * 1.05, mutualFundData.nav],
+      lowHistory: hasHistory ? mutualFundHistory : [mutualFundData.nav * 0.8, mutualFundData.nav * 0.9, mutualFundData.nav * 0.85, mutualFundData.nav * 1.05, mutualFundData.nav],
+      fiftyTwoWeekHigh: mutualFundData.nav * 1.2,
+      fiftyTwoWeekLow: mutualFundData.nav * 0.8,
+      volume: [],
+      avgVolume: mutualFundData.aum // Pack AUM into avgVolume for the component
+    };
+  }
 
   return (
     <div className="relative">
@@ -580,7 +1075,23 @@ function App() {
         {view === 'main' ? (
           <>
             <ErrorBoundary name="Hero"><HeroSection /></ErrorBoundary>
-            <ErrorBoundary name="Search"><SearchSection onSearch={setSelectedTicker} /></ErrorBoundary>
+            <ErrorBoundary name="Search">
+              <SearchSection 
+                onSearch={setSelectedTicker} 
+                analysisMode={analysisMode} 
+                setAnalysisMode={(mode) => {
+                  setAnalysisMode(mode);
+                  if (mode === 'TRADER') {
+                    setSelectedTicker(null);
+                  }
+                }}
+                investorMode={investorMode}
+                setInvestorMode={(mode) => {
+                  setInvestorMode(mode);
+                  setSelectedTicker(null);
+                }}
+              />
+            </ErrorBoundary>
             {!isAuthenticated ? (
               <section className="section-flowing bg-[#F5F1EB] py-32 relative">
                 <div className="max-w-lg mx-auto px-6 text-center">
@@ -592,20 +1103,68 @@ function App() {
                   </div>
                 </div>
               </section>
-            ) : isDataLoading ? (
-              <div className="py-32 flex justify-center items-center"><div className="w-8 h-8 border-4 border-[#C4A77D] border-t-transparent rounded-full animate-spin" /></div>
-            ) : !stockData ? (
+            ) : !selectedTicker ? (
+              <div className="py-32 text-center text-[#6B6B6B] font-medium text-lg">Please search for a stock to begin analysis.</div>
+            ) : isDataLoading && investorMode === 'MUTUAL_FUND' ? (
+              <div className="py-32 flex justify-center items-center"><OrbLoading text="Loading Mutual Fund..." /></div>
+            ) : !stockData && investorMode === 'EQUITY' && !isDataLoading ? (
               <div className="py-32 text-center">Data stream interrupted. Please try again.</div>
+            ) : !mutualFundData && investorMode === 'MUTUAL_FUND' && !isDataLoading ? (
+              <div className="py-32 text-center">Mutual Fund data unavailable.</div>
+            ) : investorMode === 'MUTUAL_FUND' ? (
+              <>
+                <ErrorBoundary name="MF Market Performance">
+                  <PriceActionSection stockData={mfMockStockData} mutualFundData={mutualFundData} isLoading={isDataLoading} />
+                </ErrorBoundary>
+                <ErrorBoundary name="MF Market Narrative">
+                  <MarketNarrativeSection stockName={mutualFundData?.schemeName} newsList={sentimentStats?.analyzedData || []} isLoading={isDataLoading} />
+                </ErrorBoundary>
+                {(!isDataLoading && mutualFundData && mfMockStockData) && (
+                  <ErrorBoundary name="MF Analysis">
+                    <FinalVerdictSection 
+                      ticker={selectedTicker}
+                      stockName={mutualFundData.schemeName} 
+                      sentimentStats={sentimentStats} 
+                      stockData={mfMockStockData}
+                      analysisMode={investorMode}
+                      mutualFundData={mutualFundData}
+                      optionsChainData={optionsChainData}
+                      onOpenTerminal={(query) => {
+                        setTerminalInitialQuery(query);
+                        setView('terminal');
+                      }}
+                      setDaCache={setDaCache}
+                    />
+                  </ErrorBoundary>
+                )}
+              </>
             ) : (
               <>
-                <ErrorBoundary name="Market Performance"><PriceActionSection stockData={stockData} /></ErrorBoundary>
-                <ErrorBoundary name="Market Narrative"><MarketNarrativeSection stockName={stockData.name} newsList={sentimentStats?.analyzedData || []} /></ErrorBoundary>
-                <ErrorBoundary name="Final Verdict"><FinalVerdictSection stockName={stockData.name} sentimentStats={sentimentStats} stockData={stockData} /></ErrorBoundary>
+                <ErrorBoundary name="Market Performance"><PriceActionSection stockData={stockData} isLoading={isDataLoading} /></ErrorBoundary>
+                {optionsChainData && <ErrorBoundary name="Options Chain"><OptionsChainSection optionsChainData={optionsChainData} /></ErrorBoundary>}
+                <ErrorBoundary name="Market Narrative"><MarketNarrativeSection stockName={stockData?.name} newsList={sentimentStats?.analyzedData || []} isLoading={isDataLoading} /></ErrorBoundary>
+                {(!isDataLoading && stockData) && (
+                  <ErrorBoundary name="Analysis">
+                  <FinalVerdictSection 
+                    ticker={selectedTicker}
+                    stockName={stockData!.name} 
+                    sentimentStats={sentimentStats} 
+                    stockData={stockData} 
+                    analysisMode={analysisMode}
+                    optionsChainData={optionsChainData}
+                    onOpenTerminal={(query) => {
+                      setTerminalInitialQuery(query);
+                      setView('terminal');
+                    }}
+                    setDaCache={setDaCache}
+                  />
+                  </ErrorBoundary>
+                )}
               </>
             )}
           </>
         ) : (
-          <ErrorBoundary name="Terminal"><TerminalView /></ErrorBoundary>
+          <ErrorBoundary name="Terminal"><TerminalView initialQuery={terminalInitialQuery} initialData={daCache} /></ErrorBoundary>
         )}
         <ErrorBoundary name="Features"><FeaturesSection /></ErrorBoundary>
       </main>

@@ -1,5 +1,6 @@
 import Sentiment from 'sentiment';
 import { API_CONFIG, hasBackendProxy } from './apiConfig';
+import { OpenRouterClient } from './orchestrator/utils/OpenRouterClient';
 
 const sentimentAnalyzer = new Sentiment();
 
@@ -10,11 +11,13 @@ export interface StockData {
   changePercent: number;
   currency: string;
   history: number[];
+  openHistory: number[];
+  highHistory: number[];
+  lowHistory: number[];
   volume: number[];
   avgVolume: number;
   fiftyTwoWeekHigh?: number;
   fiftyTwoWeekLow?: number;
-  isSynthetic?: boolean;
 }
 
 export interface NewsItem {
@@ -149,6 +152,144 @@ const safeJsonParse = async (res: Response, isProxied: boolean): Promise<any> =>
   throw new Error('Empty proxy response');
 };
 
+const resolveTickerWithLLM = async (brokenTicker: string): Promise<string | null> => {
+  try {
+    const sysPrompt = "You are an expert financial ticker resolver. The user has provided a misspelled or ambiguous company name or stock ticker. Return ONLY the correct Yahoo Finance ticker symbol for the most likely intended company (e.g. INFY.NS for Infosys, RELIANCE.NS for Reliance, AAPL for Apple). Do not return JSON. Do not include any other text. Return exactly the ticker string.";
+    const prompt = `Find the Yahoo Finance ticker for: ${brokenTicker}`;
+    const res = await OpenRouterClient.generate(prompt, sysPrompt);
+    const resolved = res.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
+    return resolved.length > 0 && resolved !== brokenTicker ? resolved : null;
+  } catch(e) {
+    console.warn("[LLM Resolver] Failed for", brokenTicker, e);
+    return null;
+  }
+};
+
+export interface MutualFundSearchResult {
+  id: string;
+  scheme_name: string;
+  scheme_type: string;
+  nav: number;
+  return3y: number;
+}
+
+export const searchMutualFunds = async (query: string): Promise<MutualFundSearchResult[]> => {
+  try {
+    const url = `/api/cache/mf-search?q=${encodeURIComponent(query)}`;
+    const response = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } }, 8000);
+    if (!response.ok) return [];
+    const data = await response.json();
+    const content = data?.data?.content || [];
+    return content.filter((c: any) => c.entity_type === 'Scheme').map((c: any) => ({
+      id: c.search_id,
+      scheme_name: c.title,
+      scheme_type: c.sub_entity_type || 'Equity',
+      nav: 0,
+      return3y: 0
+    }));
+  } catch (e) {
+    console.error("MF Search error", e);
+    return [];
+  }
+};
+
+export interface MutualFundDetails {
+  id: string;
+  schemeCode: string;
+  schemeName: string;
+  nav: number;
+  aum: number;
+  expenseRatio: number;
+  category: string;
+  subCategory: string;
+  fundManagers: Array<{ name: string; experience: string }>;
+  topHoldings: Array<{ company_name: string; corpus_per: number; sector_name: string }>;
+  sectorAllocation: Array<{ sector_name: string; corpus_per: number }>;
+  riskRatios: any;
+  returns: any;
+}
+
+export const fetchMutualFundDetails = async (id: string): Promise<MutualFundDetails | null> => {
+  try {
+    const url = `/api/cache/mf-details?id=${id}`;
+    const response = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } }, 10000);
+    if (!response.ok) return null;
+    const data = await response.json();
+    
+    return {
+      id,
+      schemeCode: data.scheme_code,
+      schemeName: data.scheme_name,
+      nav: data.nav,
+      aum: data.aum,
+      expenseRatio: data.expense_ratio,
+      category: data.category,
+      subCategory: data.sub_category,
+      fundManagers: data.fund_manager_details?.map((fm: any) => ({ name: fm.person_name, experience: fm.experience })) || [],
+      topHoldings: data.holdings?.slice(0, 15) || [],
+      sectorAllocation: data.holdings ? Array.from(
+        data.holdings.reduce((acc: Map<string, number>, curr: any) => {
+          if (curr.sector_name) {
+            acc.set(curr.sector_name, (acc.get(curr.sector_name) || 0) + (curr.corpus_per || 0));
+          }
+          return acc;
+        }, new Map())
+      ).map(([sector_name, corpus_per]: any) => ({ sector_name, corpus_per })) : [],
+      riskRatios: data.return_stats?.[0] ? {
+        sharpe: data.return_stats[0].sharpe_ratio,
+        alpha: data.return_stats[0].alpha,
+        beta: data.return_stats[0].beta,
+        standardDeviation: data.return_stats[0].standard_deviation
+      } : {},
+      returns: data.return_stats?.[0] || {}
+    };
+  } catch (error) {
+    console.error("Failed to fetch MF details:", error);
+    return null;
+  }
+};
+
+export const fetchMutualFundHistory = async (amfiCode: string): Promise<number[]> => {
+  try {
+    const url = `/api/cache/mf-history?amfi=${encodeURIComponent(amfiCode)}`;
+    const response = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } }, 10000);
+    if (!response.ok) return [];
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to fetch MF history:", error);
+    return [];
+  }
+};
+
+export const fetchMutualFundNews = async (schemeName: string): Promise<SentimentAnalysis | null> => {
+  try {
+    const url = `/api/cache/mf-news?q=${encodeURIComponent(schemeName)}`;
+    const response = await fetchWithTimeout(url, { headers: { 'Accept': 'application/json' } }, 10000);
+    if (!response.ok) return null;
+    const data = await response.json();
+    
+    const analyzedData = (data || []).map((item: any) => ({
+      title: item.title,
+      url: item.url,
+      source: item.source,
+      category: 'Neutral', // Baseline before full analysis
+      score: 50,
+      content: item.content
+    }));
+
+    return {
+      avgScore: 50,
+      positive: analyzedData.filter((d: any) => d.category === 'Positive').length,
+      negative: analyzedData.filter((d: any) => d.category === 'Negative').length,
+      neutral: analyzedData.length,
+      analyzedData
+    };
+  } catch (error) {
+    console.error("Failed to fetch MF news:", error);
+    return null;
+  }
+};
+
 export const fetchIndianStockDetails = async (ticker: string): Promise<IndianStockDetails | null> => {
   try {
     const baseTicker = ticker.replace(/\.(NS|BO)$/, '');
@@ -200,8 +341,11 @@ const resolveMarketStackSymbol = (ticker: string): string => {
   return `${base}.XNSE`;
 };
 
-export const fetchMarketStackData = async (ticker: string): Promise<MarketStackData | null> => {
+export const fetchMarketStackData = async (ticker: string, onProgress?: (step: string, details?: string) => void, isRetry = false): Promise<{ eod: any[], splits: any[], dividends: any[] } | null> => {
+  if (['NIFTY', 'BANKNIFTY', 'FINNIFTY', 'NSEI', 'NSEBANK', 'CNXFIN'].includes(ticker)) return null;
+
   if (!API_CONFIG.MARKETSTACK_API_KEY) {
+    onProgress?.('API Check', 'MarketStack API key not configured. Bypassing...');
     console.warn('MarketStack API key not configured. Skipping.');
     return null;
   }
@@ -220,13 +364,15 @@ export const fetchMarketStackData = async (ticker: string): Promise<MarketStackD
       if (eodRes.ok) {
         const eodData = await eodRes.json();
         if (eodData?.data) results.eod = eodData.data;
-        console.info(`[MarketStack] EOD: ${results.eod.length} records`);
-      } else {
-        console.warn(`[MarketStack] EOD failed: ${eodRes.status}`);
+      } else if (!isRetry) {
+        const fixedTicker = await resolveTickerWithLLM(ticker);
+        if (fixedTicker) return fetchMarketStackData(fixedTicker, onProgress, true);
       }
     } catch (e: any) {
-      if (e?.name === 'AbortError') console.warn('[MarketStack] EOD timeout');
-      else console.warn("MarketStack EOD fetch failed:", e);
+      if (!isRetry) {
+        const fixedTicker = await resolveTickerWithLLM(ticker);
+        if (fixedTicker) return fetchMarketStackData(fixedTicker, onProgress, true);
+      }
     }
 
     const splitsUrl = import.meta.env.DEV
@@ -237,12 +383,8 @@ export const fetchMarketStackData = async (ticker: string): Promise<MarketStackD
       if (splitsRes.ok) {
         const splitsData = await splitsRes.json();
         if (splitsData?.data) results.splits = splitsData.data;
-        console.info(`[MarketStack] Splits: ${results.splits.length} records`);
       }
-    } catch (e: any) {
-      if (e?.name === 'AbortError') console.warn('[MarketStack] Splits timeout');
-      else console.warn("MarketStack Splits fetch failed:", e);
-    }
+    } catch (error) {}
 
     const divUrl = import.meta.env.DEV
       ? `/api/marketstack/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`
@@ -252,11 +394,9 @@ export const fetchMarketStackData = async (ticker: string): Promise<MarketStackD
       if (divRes.ok) {
         const divData = await divRes.json();
         if (divData?.data) results.dividends = divData.data;
-        console.info(`[MarketStack] Dividends: ${results.dividends.length} records`);
       }
     } catch (e: any) {
-      if (e?.name === 'AbortError') console.warn('[MarketStack] Dividends timeout');
-      else console.warn("MarketStack Dividends fetch failed:", e);
+      // silent
     }
 
     if (results.eod.length === 0 && results.splits.length === 0 && results.dividends.length === 0) {
@@ -265,6 +405,7 @@ export const fetchMarketStackData = async (ticker: string): Promise<MarketStackD
 
     return results;
   } catch (e) {
+    onProgress?.('API Check', 'MarketStack completely failed. Relying on Deep Web Scraper.');
     console.warn("MarketStack fetch collapsed:", e);
     return null;
   }
@@ -376,14 +517,7 @@ export const fetchTradingViewSentiment = async (ticker: string): Promise<{ socia
   }
 };
 
-export const generateStableChartData = (ticker: string, basePrice: number): number[] => {
-  const hash = ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  const variance = basePrice * 0.05;
-  return Array.from({ length: 30 }, (_, i) => {
-    const p = basePrice + Math.sin(i * 0.3 + hash) * variance + (Math.sin(hash + i) * variance * 0.3);
-    return parseFloat(p.toFixed(2));
-  });
-};
+// Removed generateStableChartData function
 
 export const getProxyUrl = (targetUrl: string, apiAlias: 'yahoo1' | 'yahoo2' | 'groww' | 'mediastack') => {
   if (import.meta.env.DEV) {
@@ -397,13 +531,27 @@ export const getProxyUrl = (targetUrl: string, apiAlias: 'yahoo1' | 'yahoo2' | '
   return `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
 };
 
-export const fetchStockData = async (ticker: string, fallbackName: string): Promise<StockData | null> => {
+export const fetchStockData = async (ticker: string, fallbackName?: string, onProgress?: (step: string, details?: string) => void, isRetry = false): Promise<StockData | null> => {
   try {
-    const rawUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?range=1mo&interval=1d`;
+    const indexMap: Record<string, string> = {
+      'NIFTY': '^NSEI',
+      'BANKNIFTY': '^NSEBANK',
+      'FINNIFTY': '^CNXFIN'
+    };
+    const queryTicker = indexMap[ticker] || ticker;
+    
+    const rawUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(queryTicker)}?range=1mo&interval=1d`;
     const proxyUrl = getProxyUrl(rawUrl, 'yahoo1');
 
     const res = await fetchWithTimeout(proxyUrl, { headers: { 'Accept': 'application/json' } }, 15000);
-    if (!res.ok) throw new Error("Yahoo Finance Network Error");
+    if (!res.ok) {
+      if (res.status === 404 && !isRetry) {
+         onProgress?.('API Check', `Ticker ${ticker} not found. Using AI to resolve correct ticker...`);
+         const fixedTicker = await resolveTickerWithLLM(ticker);
+         if (fixedTicker) return fetchStockData(fixedTicker, fallbackName, onProgress, true);
+      }
+      throw new Error(`Yahoo Finance Error: ${res.status}`);
+    }
 
     const data = await safeJsonParse(res, import.meta.env.DEV);
 
@@ -415,6 +563,10 @@ export const fetchStockData = async (ticker: string, fallbackName: string): Prom
     const meta = result.meta;
 
     const closePrices: number[] = quotes.close.filter((p: number | null) => p !== null);
+    const openPrices: number[] = quotes.open ? quotes.open.filter((p: number | null) => p !== null) : [];
+    const highPrices: number[] = quotes.high ? quotes.high.filter((p: number | null) => p !== null) : [];
+    const lowPrices: number[] = quotes.low ? quotes.low.filter((p: number | null) => p !== null) : [];
+    
     if (closePrices.length === 0) throw new Error("No pricing data found");
 
     const volumeArray: number[] = quotes.volume
@@ -425,8 +577,8 @@ export const fetchStockData = async (ticker: string, fallbackName: string): Prom
       : 0;
 
     const currency_code = meta.currency || 'USD';
-    const currentPrice = closePrices[closePrices.length - 1];
-    const previousPrice = closePrices.length > 1 ? closePrices[closePrices.length - 2] : currentPrice;
+    const currentPrice = meta.regularMarketPrice !== undefined ? meta.regularMarketPrice : closePrices[closePrices.length - 1];
+    const previousPrice = meta.chartPreviousClose !== undefined ? meta.chartPreviousClose : (closePrices.length > 1 ? closePrices[closePrices.length - 2] : currentPrice);
 
     const change = currentPrice - previousPrice;
     const changePercent = previousPrice > 0 ? (change / previousPrice) * 100 : 0;
@@ -439,32 +591,104 @@ export const fetchStockData = async (ticker: string, fallbackName: string): Prom
       changePercent: parseFloat(changePercent.toFixed(2)),
       currency: currency_code,
       history: closePrices.slice(-30).map(p => parseFloat(p.toFixed(2))),
+      openHistory: openPrices.slice(-30).map(p => parseFloat(p.toFixed(2))),
+      highHistory: highPrices.slice(-30).map(p => parseFloat(p.toFixed(2))),
+      lowHistory: lowPrices.slice(-30).map(p => parseFloat(p.toFixed(2))),
       volume: volumeArray.slice(-30),
       avgVolume,
       fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh ? parseFloat(meta.fiftyTwoWeekHigh.toFixed(2)) : undefined,
       fiftyTwoWeekLow: meta.fiftyTwoWeekLow ? parseFloat(meta.fiftyTwoWeekLow.toFixed(2)) : undefined,
     };
-  } catch (error) {
-    const hash = ticker.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const basePrice = 100 + (hash % 2000);
-    const history = generateStableChartData(ticker, basePrice);
+  } catch (error: any) {
+    onProgress?.('API Check', `Market Data API failed (${error.message}). Hitting Web Scraper for real data...`);
+    
+    try {
+      const backendUrl = hasBackendProxy ? '/api/scrape-data' : `${API_CONFIG.FIREBASE_FUNCTIONS_URL}/scrape-data`;
+      const res = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'daily', ticker })
+      });
+      
+      if (!res.ok) throw new Error("Backend Scraper Failed");
+      const result = await res.json();
+      if (!result.success || !result.data) throw new Error("Scraper failed to parse");
+      return result.data;
+    } catch (scrapeError) {
+      console.error("Total Data Failure:", scrapeError);
+      throw new Error(`Data fetch and scraper failed for ${ticker}. Please try again later.`);
+    }
+  }
+};
 
-    const currentPrice = history[history.length - 1];
-    const previousPrice = history[history.length - 2];
-    const change = currentPrice - previousPrice;
-    const changePercent = (change / previousPrice) * 100;
+export const fetchIntradayStockData = async (ticker: string, interval: '5m'|'15m'|'30m' = '15m', onProgress?: (step: string, details?: string) => void, isRetry = false): Promise<any> => {
+  try {
+    const indexMap: Record<string, string> = {
+      'NIFTY': '^NSEI',
+      'BANKNIFTY': '^NSEBANK',
+      'FINNIFTY': '^CNXFIN'
+    };
+    const queryTicker = indexMap[ticker] || ticker;
+
+    const rawUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(queryTicker)}?range=5d&interval=${interval}`;
+    const proxyUrl = getProxyUrl(rawUrl, 'yahoo1');
+
+    const res = await fetchWithTimeout(proxyUrl, { headers: { 'Accept': 'application/json' } }, 15000);
+    if (!res.ok) {
+      if (res.status === 404 && !isRetry) {
+         const fixedTicker = await resolveTickerWithLLM(ticker);
+         if (fixedTicker) return fetchIntradayStockData(fixedTicker, interval, onProgress, true);
+      }
+      throw new Error(`Yahoo Finance Error: ${res.status}`);
+    }
+
+    const data = await safeJsonParse(res, import.meta.env.DEV);
+    if (data.chart && data.chart.error) throw new Error(data.chart.error.description);
+    if (!data.chart || !data.chart.result) throw new Error("Format error or missing chart data.");
+
+    const result = data.chart.result[0];
+    const quotes = result.indicators.quote[0];
+    const timestamp = result.timestamp;
+    const meta = result.meta;
+    
+    const closePrices: number[] = quotes.close.filter((p: number | null) => p !== null);
+    const volumeArray: number[] = quotes.volume ? quotes.volume.filter((v: number | null) => v !== null).map(Number) : [];
+    const highPrices: number[] = quotes.high.filter((p: number | null) => p !== null);
+    const lowPrices: number[] = quotes.low.filter((p: number | null) => p !== null);
+
+    if (closePrices.length === 0) throw new Error("No pricing data found");
 
     return {
-      name: fallbackName || ticker.split('.')[0],
-      price: parseFloat(currentPrice.toFixed(2)),
-      change: parseFloat(change.toFixed(2)),
-      changePercent: parseFloat(changePercent.toFixed(2)),
-      currency: ticker.endsWith('.NS') || ticker.endsWith('.BO') ? 'INR' : 'USD',
-      history: history,
-      volume: [],
-      avgVolume: 0,
-      isSynthetic: true,
+      closePrices,
+      volumeArray,
+      highPrices,
+      lowPrices,
+      timestamp,
+      currentPrice: meta.regularMarketPrice !== undefined ? meta.regularMarketPrice : closePrices[closePrices.length - 1],
+      interval
     };
+  } catch (error: any) {
+    onProgress?.('Trader Data Check', `Intraday Market API failed (${error.message}). Hitting Web Scraper for real data...`);
+    try {
+      const backendUrl = hasBackendProxy ? '/api/scrape-data' : `${API_CONFIG.FIREBASE_FUNCTIONS_URL}/scrape-data`;
+      const res = await fetch(backendUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'intraday', ticker, interval })
+      });
+      
+      if (!res.ok) throw new Error("Backend Scraper Failed");
+      const result = await res.json();
+      if (!result.success || !result.data) throw new Error("Scraper failed to parse");
+      
+      return {
+        ...result.data,
+        interval
+      };
+    } catch (scrapeError) {
+      console.error("Total Data Failure:", scrapeError);
+      throw new Error(`Data fetch and scraper failed for intraday ${ticker}. Please try again later.`);
+    }
   }
 };
 
@@ -507,7 +731,7 @@ export const fetchGNewsArticles = async (query: string, companyName: string): Pr
   }
 };
 
-export const fetchNewsAndSentiment = async (searchQuery: string, companyName?: string): Promise<SentimentAnalysis | null> => {
+export const fetchNewsAndSentiment = async (searchQuery: string, companyName?: string, onProgress?: (step: string, details?: string) => void): Promise<SentimentAnalysis | null> => {
   try {
     let rawArticles: { title: string; url: string; source?: string; content?: string }[] = [];
 
@@ -515,7 +739,7 @@ export const fetchNewsAndSentiment = async (searchQuery: string, companyName?: s
       fetchEquityFearGreedIndex(),
       fetchTradingViewSentiment(searchQuery),
       fetchIndianStockDetails(searchQuery),
-      fetchMarketStackData(searchQuery)
+      fetchMarketStackData(searchQuery, onProgress)
     ]).then(results => results.map(r => r.status === 'fulfilled' ? r.value : null));
 
     const tvResult = tvData as { socialHeat: number; communitySentiment: CommunitySentiment } | null;
@@ -566,37 +790,25 @@ export const fetchNewsAndSentiment = async (searchQuery: string, companyName?: s
       rawArticles = indianDet.recentNews.map(n => ({ title: n.title, url: n.url, source: n.source }));
     }
 
-    // 4. Quaternary: MarketStack EOD-based synthetic headlines
-    if (rawArticles.length === 0 && marketStackData && (marketStackData as MarketStackData)?.eod?.length > 0) {
-      console.info("All news APIs exhausted — generating MarketStack EOD-based intelligence summaries");
-      const ms = marketStackData as MarketStackData;
-      const eod = ms.eod;
-      const latest = eod[0];
-      const prev = eod.length > 1 ? eod[1] : null;
-      if (latest) {
-        const change = prev ? ((latest.close - prev.close) / prev.close * 100).toFixed(2) : '0.00';
-        const direction = parseFloat(change) >= 0 ? 'gained' : 'lost';
-        rawArticles.push({ title: `${searchQuery} ${direction} ${Math.abs(parseFloat(change))}% closing at ${latest.close}`, url: '#', source: 'MarketStack EOD' });
-        if (ms.dividends.length > 0) {
-          const d = ms.dividends[0];
-          rawArticles.push({ title: `${searchQuery} declared dividend of ${d.dividend} on ${d.date}`, url: '#', source: 'MarketStack Dividends' });
+    // 4. Quaternary: Backend News Scraper
+    if (rawArticles.length === 0) {
+      console.info("All news APIs exhausted — hitting backend web scraper for headlines");
+      try {
+        const backendUrl = hasBackendProxy ? '/api/scrape-data' : `${API_CONFIG.FIREBASE_FUNCTIONS_URL}/scrape-data`;
+        const res = await fetch(backendUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'news', ticker: searchQuery })
+        });
+        
+        if (res.ok) {
+           const result = await res.json();
+           if (result.success && result.data) {
+             rawArticles = result.data;
+           }
         }
-        if (ms.splits.length > 0) {
-          const s = ms.splits[0];
-          rawArticles.push({ title: `${searchQuery} stock split factor ${s.split_factor}x on ${s.date}`, url: '#', source: 'MarketStack Splits' });
-        }
-        if (eod.length >= 7) {
-          const weekAgo = eod[6];
-          const weeklyChange = ((latest.close - weekAgo.close) / weekAgo.close * 100).toFixed(2);
-          rawArticles.push({ title: `${searchQuery} weekly performance: ${weeklyChange}% move from ${weekAgo.close} to ${latest.close}`, url: '#', source: 'MarketStack EOD' });
-        }
-        if (eod.length >= 30) {
-          const monthAgo = eod[eod.length - 1];
-          const monthlyHigh = Math.max(...eod.map(d => d.high));
-          const monthlyLow = Math.min(...eod.map(d => d.low));
-          const monthlyChange = ((latest.close - monthAgo.close) / monthAgo.close * 100).toFixed(2);
-          rawArticles.push({ title: `${searchQuery} 30-day range: ${monthlyLow}-${monthlyHigh}, monthly change ${monthlyChange}%`, url: '#', source: 'MarketStack EOD' });
-        }
+      } catch (scrapeError) {
+        console.warn("News scraper failed:", scrapeError);
       }
     }
 
@@ -668,6 +880,111 @@ export const fetchNewsAndSentiment = async (searchQuery: string, companyName?: s
     };
   } catch (error) {
     console.error("Multi-node intel fetch collapsed:", error);
+    return null;
+  }
+};
+
+export const fetchLivePrice = async (ticker: string) => {
+  try {
+    // If it's an Indian stock, try Groww for ultra-fast live price
+    if (ticker.endsWith('.NS') || ticker.endsWith('.BO')) {
+      const baseTicker = ticker.replace(/\.(NS|BO)$/, '');
+      const exchange = ticker.endsWith('.NS') ? 'NSE' : 'BSE';
+      const url = `https://groww.in/v1/api/stocks_data/v1/tr_live_prices/exchange/${exchange}/segment/CASH/${baseTicker}/latest`;
+      const proxyUrl = getProxyUrl(url, 'groww');
+      const response = await fetchWithTimeout(proxyUrl, { headers: { 'Accept': 'application/json' } }, 5000);
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.ltp) {
+          return {
+            price: data.ltp,
+            change: data.dayChange,
+            changePercent: data.dayChangePerc,
+            high: data.high,
+            low: data.low,
+            volume: data.volume
+          };
+        }
+      }
+    }
+    
+    // Fallback to Yahoo Finance real-time quote
+    const indexMap: Record<string, string> = {
+      'NIFTY': '^NSEI',
+      'BANKNIFTY': '^NSEBANK',
+      'FINNIFTY': '^CNXFIN'
+    };
+    const queryTicker = indexMap[ticker] || ticker;
+
+    const rawUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(queryTicker)}?range=1d&interval=1m`;
+    const response = await fetchWithTimeout(getProxyUrl(rawUrl, 'yahoo1'), { headers: { 'Accept': 'application/json' } }, 5000);
+    if (response.ok) {
+      const data = await safeJsonParse(response, import.meta.env.DEV);
+      const meta = data.chart?.result?.[0]?.meta;
+      if (meta && meta.regularMarketPrice !== undefined) {
+        const currentPrice = meta.regularMarketPrice;
+        const previousPrice = meta.chartPreviousClose || currentPrice;
+        const change = currentPrice - previousPrice;
+        const changePercent = previousPrice > 0 ? (change / previousPrice) * 100 : 0;
+        return {
+          price: currentPrice,
+          change: change,
+          changePercent: changePercent,
+          high: meta.regularMarketDayHigh || currentPrice,
+          low: meta.regularMarketDayLow || currentPrice,
+          volume: meta.regularMarketVolume || 0
+        };
+      }
+    }
+  } catch (error) {
+    console.warn("Failed to fetch live price:", error);
+  }
+  return null;
+};
+
+export interface OptionGreeks {
+  delta: number;
+  gamma: number;
+  theta: number;
+  vega: number;
+  rho: number;
+}
+
+export interface OptionData {
+  strike: number;
+  ltp: number;
+  iv: number;
+  oi: number;
+  volume: number;
+  greeks: OptionGreeks;
+}
+
+export interface OptionsChainResponse {
+  index: string;
+  underlying: number;
+  expiryDate: string;
+  daysToExpiry: number;
+  pcr: number;
+  chain: {
+    strikePrice: number;
+    CE: OptionData | null;
+    PE: OptionData | null;
+    isATM: boolean;
+  }[];
+}
+
+export const fetchOptionsChain = async (index: string = 'NIFTY'): Promise<OptionsChainResponse | null> => {
+  try {
+    const url = hasBackendProxy ? `/api/options-chain?index=${encodeURIComponent(index)}` : `${API_CONFIG.FIREBASE_FUNCTIONS_URL}/options-chain?index=${encodeURIComponent(index)}`;
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if (response.ok) {
+      return await response.json();
+    } else {
+      console.error("Options chain fetch failed:", response.statusText);
+      return null;
+    }
+  } catch (err) {
+    console.error("Error fetching options chain:", err);
     return null;
   }
 };

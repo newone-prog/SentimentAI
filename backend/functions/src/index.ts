@@ -1,15 +1,32 @@
+import * as dotenv from "dotenv";
+dotenv.config();
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
-import NodeCache from "node-cache";
+import { MongoClient, ServerApiVersion } from "mongodb";
 
 // ── Initialize Firebase Admin
 admin.initializeApp();
 const db = admin.firestore();
 
-// ── Initialize In-Memory Cache (replaced by Firestore in prod)
-const myCache = new NodeCache({ stdTTL: 300 }); // 5 min default
+// ── Initialize MongoDB
+const uri = process.env.MONGODB_URI || "";
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  }
+});
+let mongoDbInstance: any = null;
+
+async function getMongoDb() {
+  if (mongoDbInstance) return mongoDbInstance;
+  await client.connect();
+  mongoDbInstance = client.db("sentimentai_cache");
+  return mongoDbInstance;
+}
 
 const app = express();
 app.use(cors({ origin: true }));
@@ -46,6 +63,67 @@ const proxyFetch = async (baseUrl: string, params: QueryParams, apiKey: string):
 };
 
 /* ─── API LAYER ───────────────────────────────────────────────────────────── */
+
+// GET /api/cache/:symbol
+app.get("/cache/:symbol", async (req: Request, res: Response) => {
+  try {
+    const symbol = req.params.symbol;
+    const db = await getMongoDb();
+    const collection = db.collection("analyses");
+    
+    const cached = await collection.findOne({ symbol });
+    
+    if (cached && cached.generatedAt) {
+      const generatedTime = cached.generatedAt instanceof Date ? cached.generatedAt.getTime() : new Date(cached.generatedAt).getTime();
+      const ttl = 4 * 60 * 60 * 1000; // 4 hours validity for data
+      
+      if (Date.now() - generatedTime < ttl) {
+        // Reset LRU TTL
+        await collection.updateOne({ symbol }, { $set: { lastAccessedAt: new Date() } }).catch(() => {});
+        return res.json({ cached: true, data: cached });
+      }
+    }
+    
+    return res.json({ cached: false, data: null });
+  } catch (error: any) {
+    console.error("Cache GET error:", error.message);
+    return res.status(500).json({ error: "Failed to read cache" });
+  }
+});
+
+// POST /api/cache/:symbol
+app.post("/cache/:symbol", async (req: Request, res: Response) => {
+  try {
+    const symbol = req.params.symbol;
+    const payload = req.body;
+    
+    const db = await getMongoDb();
+    const collection = db.collection("analyses");
+    
+    // Create TTL Index automatically if it doesn't exist (expires after 24 hours of no access)
+    // This solves the 512MB storage issue by purging old unaccessed reports
+    await collection.createIndex({ "lastAccessedAt": 1 }, { expireAfterSeconds: 86400 }).catch(() => {});
+    
+    const now = new Date();
+    const document = {
+      ...payload,
+      symbol,
+      generatedAt: now,
+      lastAccessedAt: now
+    };
+    
+    await collection.updateOne(
+      { symbol },
+      { $set: document },
+      { upsert: true }
+    );
+    
+    return res.json({ success: true, message: "Cached successfully" });
+  } catch (error: any) {
+    console.error("Cache POST error:", error.message);
+    return res.status(500).json({ error: "Failed to write cache" });
+  }
+});
 
 // POST /api/analyze — Full AI Research Pipeline
 app.post("/analyze", authMiddleware, async (req: Request, res: Response) => {
@@ -129,35 +207,77 @@ app.get("/news", async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/mf-search — Mutual Fund Search using Groww
+app.get("/mf-search", async (req: Request, res: Response) => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== "string") {
+      return res.status(400).json({ error: "'q' query param is required" });
+    }
+    const cacheKey = `mf_search_${q.replace(/[^a-z0-9]/gi, '_')}`;
+    const cached = await localCache.get(cacheKey, 24 * 60 * 60 * 1000); // 24h cache
+    if (cached) return res.json(cached);
+
+    const url = `https://groww.in/v1/api/search/v1/derived/scheme?available_for_investment=true&doc_type=scheme&page=0&q=${encodeURIComponent(q)}&size=5`;
+    const data = await proxyFetch(url, {}, "");
+    await localCache.set(cacheKey, data);
+    return res.json(data);
+  } catch (error: any) {
+    return res.status(500).json({ error: "MF Search failed", details: error.message });
+  }
+});
+
+// GET /api/mf-details — Mutual Fund Details using Groww
+app.get("/mf-details", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.query;
+    if (!id || typeof id !== "string") {
+      return res.status(400).json({ error: "'id' query param is required" });
+    }
+    const cacheKey = `mf_details_${id.replace(/[^a-z0-9]/gi, '_')}`;
+    const cached = await localCache.get(cacheKey, 24 * 60 * 60 * 1000); // 24h cache
+    if (cached) return res.json(cached);
+
+    const url = `https://groww.in/v1/api/data/mf/web/v3/scheme/search/${id}`;
+    const data = await proxyFetch(url, {}, "");
+    await localCache.set(cacheKey, data);
+    return res.json(data);
+  } catch (error: any) {
+    return res.status(500).json({ error: "MF Details fetch failed", details: error.message });
+  }
+});
+
 /* ─── INTERNAL HELPERS ───────────────────────────────────────────────────── */
+
+import { localCache } from "./EDriveCache";
 
 async function getMarketData(symbol: string): Promise<any> {
   const cacheKey = `market_${symbol}`;
-  const cached = myCache.get(cacheKey);
+  const cached = await localCache.get(cacheKey, 5 * 60 * 1000); // 5 min
   if (cached) return cached;
 
   // Yahoo Finance proxy
   const yahooUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}`;
   const data = await proxyFetch(yahooUrl, { interval: "1d", range: "1mo" }, "");
-  myCache.set(cacheKey, data, 300); // 5 min
+  await localCache.set(cacheKey, data);
   return data;
 }
 
 async function getNews(query: string): Promise<any> {
   const cacheKey = `news_${query}`;
-  const cached = myCache.get(cacheKey);
+  const cached = await localCache.get(cacheKey, 15 * 60 * 1000); // 15 min
   if (cached) return cached;
 
   const newsKey = process.env.GNEWS_API_KEY || "";
   const newsUrl = "https://gnews.io/api/v4/search";
   const data = await proxyFetch(newsUrl, { q: query, lang: "en", max: "10", apikey: newsKey }, "");
-  myCache.set(cacheKey, data, 900); // 15 min
+  await localCache.set(cacheKey, data);
   return data;
 }
 
 async function getTechnicalIndicators(symbol: string): Promise<any> {
   const cacheKey = `tech_${symbol}`;
-  const cached = myCache.get(cacheKey);
+  const cached = await localCache.get(cacheKey, 5 * 60 * 1000); // 5 min
   if (cached) return cached;
 
   // Placeholder: connect to real technical provider or compute manually
@@ -169,7 +289,7 @@ async function getTechnicalIndicators(symbol: string): Promise<any> {
     ema20: Math.random() * 100,
     ema50: Math.random() * 100
   };
-  myCache.set(cacheKey, mockIndicators, 300);
+  await localCache.set(cacheKey, mockIndicators);
   return mockIndicators;
 }
 

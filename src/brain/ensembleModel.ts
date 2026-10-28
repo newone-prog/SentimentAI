@@ -4,8 +4,8 @@ import { getAllTechnicalIndicators } from './technicalModel';
 import { calculateMomentumScore, calculateVolumeScore, calculateOBVScore, calculateADScore } from './regressionModel';
 
 export interface AIVerdictResult {
-  verdict: "BULLISH" | "BEARISH" | "NEUTRAL";
-  verdictClass: "verdict-bullish" | "verdict-bearish" | "verdict-neutral";
+  verdict: "BULLISH" | "BEARISH" | "NEUTRAL" | "SIDEWAYS";
+  verdictClass: "verdict-bullish" | "verdict-bearish" | "verdict-neutral" | "verdict-sideways";
   finalScore: number;
   confidence: number;
   technicalIndicators?: {
@@ -185,15 +185,19 @@ export const analyzeStock = async (stockData: StockData | null, sentimentStats: 
     const signalAgreement = totalActiveSignals > 0 ? Math.abs(positiveSignals - negativeSignals) / totalActiveSignals : 0;
     const baseConfidence = Math.min(95, 30 + (signalAgreement * 50) + (Math.abs(clampedScore) * 20));
 
-    let verdict: "BULLISH" | "BEARISH" | "NEUTRAL";
-    let vClass: "verdict-bullish" | "verdict-bearish" | "verdict-neutral";
+    let verdict: "BULLISH" | "BEARISH" | "NEUTRAL" | "SIDEWAYS";
+    let vClass: "verdict-bullish" | "verdict-bearish" | "verdict-neutral" | "verdict-sideways";
 
     if (clampedScore > 0.10) {
       verdict = "BULLISH"; vClass = "verdict-bullish";
     } else if (clampedScore < -0.10) {
       verdict = "BEARISH"; vClass = "verdict-bearish";
     } else {
-      verdict = "NEUTRAL"; vClass = "verdict-neutral";
+      if (Math.abs(momentumScore) < 0.1 && Math.abs(communityScore) < 0.1) {
+        verdict = "SIDEWAYS"; vClass = "verdict-sideways";
+      } else {
+        verdict = "NEUTRAL"; vClass = "verdict-neutral";
+      }
     }
 
     if (regime === 'trending' && Math.abs(clampedScore) > 0.05) {

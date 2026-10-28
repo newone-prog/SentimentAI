@@ -1,5 +1,6 @@
 import { API_CONFIG } from './apiConfig';
 import type { MarketStackEOD, MarketStackDividend, MarketStackSplit, AnalystNews } from './api';
+import { CacheService } from './orchestrator/cache/CacheService';
 
 export interface LLMAnalysis {
   reasoning: string;
@@ -14,7 +15,7 @@ export interface LLMAnalysis {
 const NVIDIA_MODEL = "meta/llama-3.1-70b-instruct";
 const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
 
-const LLM_TIMEOUT = 60000;
+const LLM_TIMEOUT = 300000; // 5 minutes for deep research
 
 const fetchWithRetry = async (url: string, options: RequestInit, retries: number = 2): Promise<Response> => {
   const parentSignal = options.signal;
@@ -99,8 +100,98 @@ const buildNewsIntelligenceSection = (sentimentData: any): string => {
   return `[NEWS ENTITIES — Headline-Only Analysis (no article body available)]\n${JSON.stringify(headlineSummaries)}\n\nNOTE: Only headlines are available. Analyze based on headline content but note limited depth.`;
 };
 
-export const getDeepAnalysis = async (stockName: string, priceData: any, sentimentData: any, signal?: AbortSignal): Promise<LLMAnalysis> => {
+export const getAgenticParallelAnalysis = async (
+  stockName: string,
+  priceData: any,
+  sentimentData: any,
+  userQuery?: string,
+  mutualFundData?: any
+) => {
+  const cache = new CacheService();
+  const cacheKey = `agentic-investor-${stockName}-${userQuery || 'default'}`;
+  const cached = await cache.get<any>(cacheKey);
+  
+  if (cached) {
+    console.log(`[Agentic] Cache HIT for ${cacheKey}`);
+    return cached;
+  }
+
+  console.log("[Agentic] Triggering Parallel Backend Orchestrator...");
+  const url = "/api/agentic-orchestrate";
+  
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ticker: stockName,
+      companyName: stockName,
+      priceData,
+      sentimentData,
+      userQuery,
+      mutualFundData
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Agentic Orchestrator Failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+  await cache.set(cacheKey, result, 7200); // Cache for 2 hours
+  return result;
+};
+
+import { ResearchOrchestratorService } from "./orchestrator/ResearchOrchestratorService";
+
+const orchestrator = new ResearchOrchestratorService();
+
+export const getDeepAnalysis = async (
+  stockName: string, 
+  priceData: any, 
+  sentimentData: any, 
+  signal?: AbortSignal,
+  onProgress?: (step: string, details?: string) => void
+): Promise<LLMAnalysis> => {
   console.log("LLM Service [v4.0 - Deep Research RAG with News Intelligence] Initialized");
+
+  // 1. Run local multi-agent orchestrated research
+  try {
+    console.info(`[LLM] Starting local client-side multi-agent research for ${stockName}...`);
+    
+    // Pass the real-time data to the local orchestrator
+    const report = await orchestrator.orchestrate(stockName, false, priceData, sentimentData, onProgress);
+    
+    console.info("[LLM] Orchestrated report generated successfully.");
+
+    const compiledPaper = `
+=== EXECUTIVE SUMMARY ===
+${report.executiveSummary}
+
+=== TECHNICAL ANALYSIS ===
+${report.technicalAnalysis}
+
+=== FUNDAMENTAL & NEWS ANALYSIS ===
+${report.fundamentalAndNewsAnalysis}
+
+=== BEHAVIORAL ANALYSIS ===
+${report.behavioralAnalysis}
+
+=== INVESTMENT THESIS ===
+${report.investmentThesis}
+      `.trim();
+
+    return {
+      reasoning: report.executiveSummary,
+      verdict: report.finalVerdict,
+      confidence: report.confidenceScore,
+      source: "Institutional Multi-Agent Orchestrator (Client-Side)",
+      emotionalContext: "CIO Evaluated Consensus",
+      researchPaper: compiledPaper,
+      disclaimer: "AI-generated institutional research report. Not financial advice."
+    };
+  } catch (backendError) {
+    console.warn("[LLM] Local orchestrator failed. Falling back to client-side single prompt LLM.", backendError);
+  }
 
   const newsIntelSection = buildNewsIntelligenceSection(sentimentData);
 
@@ -198,28 +289,23 @@ You have data from 5 independent sources: Yahoo Finance, TradingView, MarketStac
 - If MarketStack and Yahoo disagree on price, note the discrepancy and use the more recent source
 - When full article content is provided, analyze the substance of the article, not just the headline
 
-[TASK] Write a comprehensive equity research report in 5 sections:
+[TASK] Write a comprehensive equity research report in 5 sections. Use === before each section header (e.g. === EXECUTIVE SUMMARY ===):
 
-1. EXECUTIVE SUMMARY (2-3 sentences): Key verdict and why. State your verdict clearly.
+1. EXECUTIVE SUMMARY (2-3 sentences): Key long-term verdict and why. State your verdict clearly.
 
-2. TECHNICAL ANALYSIS: Analyze the price trend using BOTH Yahoo and MarketStack EOD data. Analyze RSI, MACD, Stochastic values. Identify support/resistance from 30-day EOD highs/lows AND 52-week range. Reference specific price levels and indicator values. State whether indicators signal overbought/oversold. Compare current price to VWAP. Distinguish between trending and ranging regimes — in a strong trend, RSI>70 can signal strength not overbought; in a range, RSI>70 signals overbought.
+2. VALUATION & LONG-TERM TREND: Analyze the broader price trend in the context of valuation. Identify long-term structural support levels. Contrast short-term technical noise (RSI, Stochastic) with the 200-day moving average and long-term consolidation patterns.
 
-3. FUNDAMENTAL & DIVIDEND ANALYSIS: Analyze dividend history from MarketStack — calculate approximate yield if current price is available. Assess split-adjusted performance. Analyze each news item's IMPACT AND SUBSTANCE (use full article content when available). Cite specific headlines and their sentiment scores. Explain WHY each event affects the stock — sector trends, regulatory changes, macro factors. Reference the source of each data point.
+3. FUNDAMENTAL & NEWS ANALYSIS: Analyze each news item's impact on intrinsic value. Explain WHY each event affects the stock's multi-year moat — sector trends, regulatory changes, macro factors. Reference the source of each data point.
 
-4. BEHAVIORAL ANALYSIS: What are traders doing? Is there FOMO, panic selling, accumulation, or distribution? Use Fear & Greed Index, Social Heat, and community sentiment to explain crowd psychology. Are smart money and retail aligned or divergent? Use MarketStack volume trends to confirm or deny crowd behavior signals.
+4. INSTITUTIONAL SENTIMENT & MARGIN OF SAFETY: How is the broader market pricing this asset? Are retail traders panic selling (creating a discount/margin of safety) or is there FOMO (creating overvaluation)? Analyze if smart money is accumulating. 
 
-5. INVESTMENT THESIS: Should a trader BUY, SELL, or HOLD? Give specific entry/exit price levels from the data. Factor in dividend income potential. State risk factors. End with a mandatory disclaimer.
+5. INVESTMENT THESIS: Should a long-term investor ACCUMULATE, HOLD, or REDUCE? Discuss intrinsic value margin of safety and multi-year growth runway instead of short-term entry/exit levels. State structural risk factors. End with a mandatory disclaimer.
 
-[CRITICAL VERDICT RULES — TREND-AWARE]
-- If the market is in a STRONG UPTREND (ADX>25, price above SMA20): RSI>70 signals STRENGTH, not overbought — lean BULLISH
-- If the market is in a STRONG DOWNTREND (ADX>25, price below SMA20): RSI<30 signals WEAKNESS, not oversold — lean BEARISH
-- If the market is RANGING (ADX<20): RSI>70 signals overbought → lean BEARISH; RSI<30 signals oversold → lean BULLISH
-- If RSI < 30 AND Stochastic < 20 AND price is in a range (low ADX) AND Recommend.All > 0: lean BULLISH (contrarian buy in oversold range)
-- If RSI > 70 AND Stochastic > 80 AND price is in a range (low ADX) AND Recommend.All < 0: lean BEARISH (contrarian sell in overbought range)
-- If price is down more than 1% with bearish technicals in a downtrend: verdict should be BEARISH (follow the trend)
-- If price is up more than 1% with bullish technicals in an uptrend: verdict should be BULLISH (follow the trend)
-- Only return NEUTRAL if signals are genuinely mixed (some bullish, some bearish, no clear regime)
-- DO NOT default to NEUTRAL out of caution — make a decisive call based on the data
+[CRITICAL VERDICT RULES — VALUE AWARE]
+- If fundamental value is strong but short-term technicals are weak (oversold, fear): lean ACCUMULATE (buying at a discount)
+- If fundamental value is weak but short-term technicals are strong (overbought, greed): lean REDUCE (selling into the hype)
+- If price is falling but structural thesis is intact: lean ACCUMULATE
+- Do not provide short-term day-trading entry/exit levels.
 - Your confidence must be between 0 and 100
 
 [OUTPUT FORMAT — STRICT RULES]
@@ -318,7 +404,7 @@ IMPORTANT: The "confidence" field must be an integer between 0 and 100.
         .replace(/\\n/g, '\n').replace(/\\r/g, '').replace(/\\t/g, '\t').replace(/\\"/g, '"');
     }
 
-    const validVerdicts = ['BULLISH', 'BEARISH', 'NEUTRAL'];
+    const validVerdicts = ['BULLISH', 'BEARISH', 'NEUTRAL', 'SIDEWAYS'];
     if (!validVerdicts.includes(result.verdict)) {
       result.verdict = 'NEUTRAL';
     }
@@ -350,7 +436,10 @@ IMPORTANT: The "confidence" field must be an integer between 0 and 100.
       "Content-Type": "application/json",
       "Authorization": `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`
     }, nvidiaBody, `NVIDIA Intelligence Node (${NVIDIA_MODEL})`);
-  } catch (nvidiaError) {
+  } catch (nvidiaError: any) {
+    if (nvidiaError?.name === 'AbortError') {
+      throw nvidiaError;
+    }
     console.warn("NVIDIA Node Failed, switching to OpenRouter...", nvidiaError);
 
     try {
@@ -374,7 +463,10 @@ IMPORTANT: The "confidence" field must be an integer between 0 and 100.
         "HTTP-Referer": window.location.origin,
         "X-Title": "SentimentAI v4"
       }, openRouterBody, `OpenRouter Mesh (${OPENROUTER_MODEL})`);
-    } catch (openRouterError) {
+    } catch (openRouterError: any) {
+      if (openRouterError?.name === 'AbortError') {
+        throw openRouterError;
+      }
       console.error("CRITICAL: All Intelligence Nodes Offline.", openRouterError);
       return {
         reasoning: "Intelligence stream interrupted. Falling back to local deterministic model.",
@@ -384,6 +476,185 @@ IMPORTANT: The "confidence" field must be an integer between 0 and 100.
         emotionalContext: "Disconnected",
         disclaimer: "AI-generated analysis. Not financial advice. Invest at your own risk.",
         researchPaper: "=== EXECUTIVE SUMMARY ===\n\nAll AI intelligence nodes are currently offline. Unable to generate research report.\n\n=== DATA SOURCES ===\n\n- Yahoo Finance API (price data)\n- TradingView Scanner API (technical indicators)\n- MarketStack API (EOD data, dividends, splits)\n- Indian Stock API (news, analyst view)\n- GNews / MediaStack (news sentiment)\n\nPlease try again later when the LLM services are restored."
+      };
+    }
+  }
+};
+
+export const getMFDeepAnalysis = async (
+  fundDetails: any,
+  signal?: AbortSignal,
+  onProgress?: (step: string, details?: string) => void
+): Promise<LLMAnalysis> => {
+  console.log("LLM Service [v4.0 - Mutual Fund Deep Research] Initialized");
+  
+  const cacheKey = `mf-report-${fundDetails?.searchId || fundDetails?.schemeName}`;
+  const cache = new CacheService();
+  const cachedReport = await cache.get<LLMAnalysis>(cacheKey);
+  if (cachedReport) {
+      onProgress?.('Cache Hit', 'Found recent report. Loading from memory...');
+      return cachedReport;
+  }
+
+  
+  const fundName = fundDetails?.schemeName || 'Unknown Fund';
+  
+  const prompt = `
+You are a senior mutual fund research analyst and portfolio manager at a top-tier institutional asset management firm. Analyze the mutual fund ${fundName} using ONLY the real-time data provided below. 
+
+[REAL-TIME FUND DATA — Source: Groww API]
+- Fund Name: ${fundDetails?.schemeName}
+- Category: ${fundDetails?.category} - ${fundDetails?.subCategory}
+- Current NAV: ₹${fundDetails?.nav}
+- AUM (Assets Under Management): ₹${(fundDetails?.aum / 10000000).toFixed(2)} Crores
+- Expense Ratio: ${fundDetails?.expenseRatio}%
+
+[FUND MANAGERS]
+${fundDetails?.fundManagers?.map((fm: any) => `- Name: ${fm.name} | Experience: ${fm.experience}`).join('\n') || 'No Manager Data'}
+
+[PORTFOLIO & SECTOR ALLOCATION]
+- Top Sectors: 
+${fundDetails?.sectorAllocation?.map((s: any) => `  * ${s.sector_name}: ${s.corpus_per.toFixed(2)}%`).join('\n') || 'N/A'}
+- Top Holdings:
+${fundDetails?.topHoldings?.slice(0, 10).map((h: any) => `  * ${h.company_name} (${h.sector_name}): ${h.corpus_per.toFixed(2)}%`).join('\n') || 'N/A'}
+
+[PERFORMANCE & RISK RATIOS]
+- 1 Year Return: ${fundDetails?.returns?.return1y || 'N/A'}%
+- 3 Year Return: ${fundDetails?.returns?.return3y || 'N/A'}%
+- 5 Year Return: ${fundDetails?.returns?.return5y || 'N/A'}%
+- Alpha: ${fundDetails?.riskRatios?.alpha || 'N/A'}
+- Beta: ${fundDetails?.riskRatios?.beta || 'N/A'} (below 1 = less volatile than market, above 1 = more volatile)
+- Sharpe Ratio: ${fundDetails?.riskRatios?.sharpe || 'N/A'} (higher is better risk-adjusted return)
+- Sortino Ratio: ${fundDetails?.riskRatios?.sortino || 'N/A'} (higher is better downside protection)
+
+[TASK] Write a comprehensive Mutual Fund research report in 5 sections. Use === before each section header:
+
+1. EXECUTIVE SUMMARY (2-3 sentences): Key long-term verdict and why. State your verdict clearly.
+
+2. FUNDAMENTAL & PORTFOLIO ANALYSIS: Analyze the sector allocation and top holdings. Is it concentrated or diversified? Does the portfolio match the fund's stated category? Evaluate the Expense Ratio relative to industry standards.
+
+3. FUND MANAGER & RISK ASSESSMENT: Evaluate the fund manager's experience. Analyze Alpha, Beta, Sharpe, and Sortino ratios. Is the manager generating outsized returns for the risk taken, or just riding market momentum?
+
+4. HISTORICAL PERFORMANCE: How has it performed over 1Y, 3Y, 5Y? Discuss consistency.
+
+5. INVESTMENT THESIS & RECOMMENDATIONS: Should an investor ACCUMULATE, HOLD, or AVOID this fund? Discuss the ideal investor profile (e.g., risk appetite, time horizon). 
+*CRITICAL RULE:* If the fund has poor risk-adjusted returns (low Sharpe, negative Alpha) or underperforms its category, you MUST recommend 1 specific alternative top-performing mutual fund in the SAME category (e.g., if it's a poor Small Cap fund, recommend a better Small Cap fund like Nippon India Small Cap or Quant Small Cap). Explain why the alternative is better.
+
+[CRITICAL VERDICT RULES]
+- If Alpha is positive, Sharpe is strong, and expenses are reasonable: lean BULLISH (ACCUMULATE)
+- If Alpha is negative, Sharpe is low, or AUM is shrinking rapidly: lean BEARISH (AVOID/SWITCH)
+- Your confidence must be between 0 and 100
+
+[OUTPUT FORMAT — STRICT RULES]
+Return ONLY a valid JSON object. No markdown code blocks. No backticks. No commentary before or after.
+All newlines inside string values MUST be escaped as \\n.
+The JSON object must be exactly:
+{"reasoning":"5-6 line executive summary","verdict":"BULLISH","confidence":80,"emotionalContext":"Institutional conviction","disclaimer":"AI-generated analysis. Not financial advice. Invest at your own risk.","researchPaper":"Full research report with === section headers and \\n\\n paragraph breaks. 1-2 pages."}
+
+IMPORTANT: The "verdict" field must be exactly one of these three strings: "BULLISH", "BEARISH", or "NEUTRAL". Choose based on the data.
+`;
+
+  // We will reuse the internal tryLLM approach from getDeepAnalysis.
+  // Since tryLLM is scoped inside getDeepAnalysis, we'll duplicate the LLM caller block here for isolation.
+  
+  const NVIDIA_MODEL = "meta/llama-3.1-70b-instruct";
+  const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
+  
+  const callLLM = async (url: string, headers: Record<string, string>, body: string, label: string): Promise<LLMAnalysis> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    const parentSignal = signal;
+    const onParentAbort = () => controller.abort();
+    if (parentSignal) parentSignal.addEventListener('abort', onParentAbort);
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body,
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`${label} Offline (${response.status})`);
+      const data = await response.json();
+      let raw = data.choices[0].message.content.trim();
+      const codeBlockMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (codeBlockMatch) raw = codeBlockMatch[1].trim();
+      const braceMatch = raw.match(/\{[\s\S]*\}/);
+      if (braceMatch) raw = braceMatch[0];
+
+      let result;
+      try {
+        result = JSON.parse(raw.replace(/\n/g, '\\n'));
+      } catch (e) {
+        result = {
+          reasoning: "Analysis generated but format parsing failed.",
+          verdict: "NEUTRAL",
+          confidence: 50,
+          emotionalContext: "Parsing Error",
+          disclaimer: "AI-generated analysis.",
+          researchPaper: raw.replace(/\n/g, '\n')
+        };
+      }
+      return { ...result, source: label };
+    } finally {
+      clearTimeout(timeoutId);
+      if (parentSignal) parentSignal.removeEventListener('abort', onParentAbort);
+    }
+  };
+
+  const nvidiaBody = JSON.stringify({
+    model: NVIDIA_MODEL,
+    messages: [
+      { role: "system", content: "You are a JSON-only response engine. Output ONLY valid JSON." },
+      { role: "user", content: prompt }
+    ],
+    temperature: 0.1,
+    max_tokens: 4096,
+    response_format: { type: "json_object" }
+  });
+
+  try {
+    if (!API_CONFIG.NVIDIA_NIM_KEY) throw new Error('NVIDIA_NIM_KEY missing');
+    const result = await callLLM("/llm/nvidia", {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`
+    }, nvidiaBody, `NVIDIA MF Node (${NVIDIA_MODEL})`);
+    
+    await cache.set(cacheKey, result, 7200); // 2 hours
+    return result;
+  } catch (err: any) {
+    if (err?.name === 'AbortError') throw err;
+    try {
+      if (!API_CONFIG.OPENROUTER_KEY) throw new Error('OPENROUTER_KEY missing');
+      const orBody = JSON.stringify({
+        model: OPENROUTER_MODEL,
+        messages: [
+          { role: "system", content: "You are a JSON-only response engine. Output ONLY valid JSON." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 4096,
+        response_format: { type: "json_object" }
+      });
+      const result = await callLLM("/llm/openrouter/chat/completions", {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${API_CONFIG.OPENROUTER_KEY}`,
+        "HTTP-Referer": window.location.origin,
+        "X-Title": "SentimentAI MF Node"
+      }, orBody, `OpenRouter MF Mesh (${OPENROUTER_MODEL})`);
+
+      await cache.set(cacheKey, result, 7200); // 2 hours
+      return result;
+    } catch (orErr: any) {
+      if (orErr?.name === 'AbortError') throw orErr;
+      return {
+        reasoning: "Intelligence stream interrupted.",
+        verdict: "NEUTRAL",
+        confidence: 0,
+        source: "Local Baseline Engine",
+        emotionalContext: "Disconnected",
+        disclaimer: "AI-generated analysis. Not financial advice.",
+        researchPaper: "=== EXECUTIVE SUMMARY ===\n\nAll AI intelligence nodes are currently offline."
       };
     }
   }

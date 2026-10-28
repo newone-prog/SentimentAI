@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { signInWithGoogle, signOutUser, onAuthChange, type User } from '../lib/firebase';
+import { signInWithGoogle, signOutUser, onAuthChange, checkRedirectResult, type User } from '../lib/firebase';
 
 export interface AuthState {
   user: User | null;
@@ -15,6 +15,12 @@ export const useAuth = () => {
   });
 
   useEffect(() => {
+    checkRedirectResult().then((user) => {
+      if (user) {
+        setAuthState({ user, loading: false, error: null });
+      }
+    });
+
     const unsubscribe = onAuthChange((user) => {
       setAuthState({ user, loading: false, error: null });
     });
@@ -25,10 +31,11 @@ export const useAuth = () => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
     try {
       const user = await signInWithGoogle();
-      setAuthState({ user, loading: false, error: null });
+      setAuthState(prev => ({ ...prev, user: user || prev.user, loading: false, error: null }));
       return user;
     } catch (error: any) {
-      setAuthState(prev => ({ ...prev, loading: false, error: error.message }));
+      console.error("Login error:", error);
+      setAuthState(prev => ({ ...prev, loading: false, error: error.message || 'Login failed' }));
       return null;
     }
   };
@@ -39,6 +46,7 @@ export const useAuth = () => {
       await signOutUser();
       setAuthState({ user: null, loading: false, error: null });
     } catch (error: any) {
+      console.error("Logout error:", error);
       setAuthState(prev => ({ ...prev, loading: false, error: error.message }));
     }
   };

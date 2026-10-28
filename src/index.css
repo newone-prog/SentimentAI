@@ -420,6 +420,36 @@
   text-shadow: 0 0 60px rgba(107, 114, 128, 0.15); 
 }
 
+.verdict-sideways { 
+  color: #3B82F6; 
+  text-shadow: 0 0 60px rgba(59, 130, 246, 0.2); 
+}
+
+.verdict-strong_buy { 
+  color: #16A34A; 
+  text-shadow: 0 0 60px rgba(22, 163, 74, 0.2); 
+}
+
+.verdict-accumulate { 
+  color: #10B981; 
+  text-shadow: 0 0 60px rgba(16, 185, 129, 0.2); 
+}
+
+.verdict-hold { 
+  color: #6B7280; 
+  text-shadow: 0 0 60px rgba(107, 114, 128, 0.15); 
+}
+
+.verdict-reduce { 
+  color: #F59E0B; 
+  text-shadow: 0 0 60px rgba(245, 158, 11, 0.2); 
+}
+
+.verdict-avoid { 
+  color: #DC2626; 
+  text-shadow: 0 0 60px rgba(220, 38, 38, 0.2); 
+}
+
 /* Chart Container */
 .chart-container {
   border: 1px solid var(--color-border);

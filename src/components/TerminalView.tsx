@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import { getDevilsAdvocateAnalysis } from '../lib/terminalService';
 import { fetchStockData, fetchNewsAndSentiment } from '../lib/api';
+import { useLayoutEffect, useRef, useState, useEffect } from 'react';
 import { gsap } from 'gsap';
-import { useLayoutEffect, useRef, useState } from 'react';
 
 /* ─── RiskSection sub-component ─── */
 const RiskSection = ({ title, items, icon, color }: { title: string; items: string[]; icon: React.ReactNode; color: string }) => (
@@ -22,7 +22,7 @@ const RiskSection = ({ title, items, icon, color }: { title: string; items: stri
       <h4 className={`${color} text-xs font-mono uppercase tracking-[0.2em]`}>{title}</h4>
     </div>
     <ul className="space-y-4">
-      {items.map((item, i) => (
+      {(items || []).map((item, i) => (
         <li key={i} className="text-white/50 text-sm leading-relaxed flex gap-4 p-4 rounded-2xl hover:bg-white/[0.02] transition-colors border border-transparent hover:border-white/5">
           <span className="text-[#C4A77D]/30 font-mono">0{i + 1}</span> {item}
         </li>
@@ -31,9 +31,9 @@ const RiskSection = ({ title, items, icon, color }: { title: string; items: stri
   </div>
 );
 
-export const TerminalView: React.FC = () => {
+export const TerminalView: React.FC<{ initialQuery?: string, initialData?: any | null }> = ({ initialQuery, initialData }) => {
   const sectionRef = useRef<HTMLDivElement>(null);
-  const [command, setCommand] = useState('');
+  const [command, setCommand] = useState(initialQuery || '');
   const [isForensicsRunning, setIsForensicsRunning] = useState(false);
   const [forensicResult, setForensicsResult] = useState<any>(null);
   const [activeStep, setActiveStep] = useState<string>('');
@@ -46,6 +46,15 @@ export const TerminalView: React.FC = () => {
       );
     }
   }, []);
+
+  useEffect(() => {
+    if (initialData && !forensicResult && !isForensicsRunning) {
+      setForensicsResult(initialData);
+      setActiveStep('REPORT_GENERATED');
+    } else if (initialQuery && !isForensicsRunning && !forensicResult) {
+      runForensics(initialQuery);
+    }
+  }, [initialQuery, initialData]);
 
   const extractTicker = async (query: string): Promise<string> => {
     const queryUpper = query.toUpperCase();
@@ -228,7 +237,7 @@ export const TerminalView: React.FC = () => {
                           ))}
                         </div>
                       </div>
-                      <div className="p- backwards bg-white/[0.02] border border-white/5 rounded-2xl">
+                      <div className="p-6 bg-white/[0.02] border border-white/5 rounded-2xl">
                         <h4 className="text-[10px] font-mono text-white/40 uppercase mb-4 tracking-widest">Crowd Hype Velocity</h4>
                         <div className="h-24 flex items-end gap-1">
                           {[20, 30, 80, 100, 40, 20, 15, 10].map((h, i) => (

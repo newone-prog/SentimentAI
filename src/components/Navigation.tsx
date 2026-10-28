@@ -33,7 +33,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   const [scrolled, setScrolled] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
+  const desktopUserMenuRef = useRef<HTMLDivElement>(null);
+  const mobileUserMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -45,7 +46,10 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideDesktop = desktopUserMenuRef.current?.contains(target);
+      const insideMobile = mobileUserMenuRef.current?.contains(target);
+      if (!insideDesktop && !insideMobile) {
         setShowUserMenu(false);
       }
     };
@@ -76,7 +80,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           {authLoading ? (
             <div className="nav-auth-loading"><Loader2 className="w-4 h-4 animate-spin text-[#C4A77D]" /></div>
           ) : isAuthenticated && user ? (
-            <div ref={userMenuRef} className="nav-user-wrapper">
+            <div ref={desktopUserMenuRef} className="nav-user-wrapper">
               <button className="nav-user-btn" onClick={() => setShowUserMenu(!showUserMenu)}>
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="" className="nav-user-avatar" referrerPolicy="no-referrer" />
@@ -85,13 +89,21 @@ export const Navigation: React.FC<NavigationProps> = ({
                 )}
               </button>
               {showUserMenu && (
-                <div className="nav-user-dropdown">
+                <div className="nav-user-dropdown" onMouseDown={(e) => e.stopPropagation()}>
                   <div className="nav-user-dropdown-header">
-                    <span className="nav-user-dropdown-name">{user.displayName}</span>
-                    <span className="nav-user-dropdown-email">{user.email}</span>
+                    <span className="nav-user-dropdown-name">{user.displayName || 'Investor'}</span>
+                    <span className="nav-user-dropdown-email">{user.email || ''}</span>
                   </div>
                   <div className="nav-user-dropdown-divider" />
-                   <button className="nav-user-dropdown-item" onClick={async () => { await logout(); setShowUserMenu(false); }}>
+                   <button 
+                     className="nav-user-dropdown-item" 
+                     onClick={async (e) => { 
+                       e.preventDefault();
+                       e.stopPropagation();
+                       setShowUserMenu(false); 
+                       await logout(); 
+                     }}
+                   >
                      <LogOut className="w-4 h-4" />
                      Sign Out
                    </button>
@@ -99,7 +111,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               )}
             </div>
           ) : (
-            <button className="nav-login-btn" onClick={login}>
+            <button className="nav-login-btn" onClick={() => login()}>
               <LogIn className="w-4 h-4" />
               <span>Sign In</span>
             </button>
@@ -107,7 +119,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
         <div className="nav-mobile-actions">
           {isAuthenticated && user ? (
-            <div ref={userMenuRef} className="nav-user-wrapper">
+            <div ref={mobileUserMenuRef} className="nav-user-wrapper">
               <button className="nav-user-btn" onClick={() => setShowUserMenu(!showUserMenu)}>
                 {user.photoURL ? (
                   <img src={user.photoURL} alt="" className="nav-user-avatar" referrerPolicy="no-referrer" />
@@ -116,13 +128,21 @@ export const Navigation: React.FC<NavigationProps> = ({
                 )}
               </button>
               {showUserMenu && (
-                <div className="nav-user-dropdown">
+                <div className="nav-user-dropdown" onMouseDown={(e) => e.stopPropagation()}>
                   <div className="nav-user-dropdown-header">
-                    <span className="nav-user-dropdown-name">{user.displayName}</span>
-                    <span className="nav-user-dropdown-email">{user.email}</span>
+                    <span className="nav-user-dropdown-name">{user.displayName || 'Investor'}</span>
+                    <span className="nav-user-dropdown-email">{user.email || ''}</span>
                   </div>
                   <div className="nav-user-dropdown-divider" />
-                   <button className="nav-user-dropdown-item" onClick={async () => { await logout(); setShowUserMenu(false); }}>
+                   <button 
+                     className="nav-user-dropdown-item" 
+                     onClick={async (e) => { 
+                       e.preventDefault();
+                       e.stopPropagation();
+                       setShowUserMenu(false); 
+                       await logout(); 
+                     }}
+                   >
                      <LogOut className="w-4 h-4" />
                      Sign Out
                    </button>
@@ -130,7 +150,7 @@ export const Navigation: React.FC<NavigationProps> = ({
               )}
             </div>
           ) : (
-            <button className="nav-login-btn" onClick={login}>
+            <button className="nav-login-btn" onClick={() => login()}>
               <LogIn className="w-4 h-4" />
               <span>Sign In</span>
             </button>
@@ -162,6 +182,24 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <Activity className="w-5 h-5" />
                 Terminal
               </button>
+              <div className="h-[1px] bg-white/10 my-4" />
+              {isAuthenticated ? (
+                <button 
+                  onClick={async () => { setShowMobileNav(false); await logout(); }} 
+                  className="mobile-nav-link text-red-400"
+                >
+                  <LogOut className="w-5 h-5" />
+                  Sign Out ({user?.displayName || user?.email || 'User'})
+                </button>
+              ) : (
+                <button 
+                  onClick={async () => { setShowMobileNav(false); await login(); }} 
+                  className="mobile-nav-link text-[#C4A77D]"
+                >
+                  <LogIn className="w-5 h-5" />
+                  Sign In with Google
+                </button>
+              )}
             </nav>
             <div className="mobile-nav-footer">
               <p className="text-white/20 text-[10px] font-mono uppercase tracking-[0.2em]">
