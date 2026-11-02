@@ -157,6 +157,34 @@ export const safeJsonParse = async (res: Response, _isProxied?: boolean): Promis
 };
 
 export const resolveTickerWithLLM = async (brokenTicker: string): Promise<string | null> => {
+  const clean = brokenTicker.trim().toLowerCase().replace(/\.ns|\.bo$/i, '');
+  const COMMON_FALLBACKS: Record<string, string> = {
+    'jio': 'JIOFIN.NS',
+    'jpl': 'JPL.NS',
+    'reliance': 'RELIANCE.NS',
+    'tatamotors': 'TATAMOTORS.NS',
+    'tata motors': 'TATAMOTORS.NS',
+    'tcs': 'TCS.NS',
+    'infy': 'INFY.NS',
+    'infosys': 'INFY.NS',
+    'hdfc': 'HDFCBANK.NS',
+    'hdfcbank': 'HDFCBANK.NS',
+    'icici': 'ICICIBANK.NS',
+    'icicibank': 'ICICIBANK.NS',
+    'sbi': 'SBIN.NS',
+    'sbin': 'SBIN.NS',
+    'airtel': 'BHARTIARTL.NS',
+    'bhartiartl': 'BHARTIARTL.NS',
+    'itc': 'ITC.NS',
+    'wipro': 'WIPRO.NS',
+    'zomato': 'ZOMATO.NS',
+    'paytm': 'PAYTM.NS'
+  };
+
+  if (COMMON_FALLBACKS[clean] && COMMON_FALLBACKS[clean] !== brokenTicker.toUpperCase()) {
+    return COMMON_FALLBACKS[clean];
+  }
+
   try {
     const sysPrompt = "You are an expert financial ticker resolver. The user has provided a company name or ticker. Return JSON: {\"ticker\": \"RELIANCE.NS\"} with the valid Yahoo Finance ticker.";
     const prompt = `Find the Yahoo Finance ticker for: ${brokenTicker}`;

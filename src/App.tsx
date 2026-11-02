@@ -148,6 +148,51 @@ const SearchSection = ({
       return trimmed;
     }
 
+    const normalizedKey = query.trim().toLowerCase();
+    const COMMON_TICKERS: Record<string, string> = {
+      'jio': 'JIOFIN.NS',
+      'jio finance': 'JIOFIN.NS',
+      'jio financial': 'JIOFIN.NS',
+      'jio financial services': 'JIOFIN.NS',
+      'jio financial services ltd': 'JIOFIN.NS',
+      'jpl': 'JPL.NS',
+      'jio platforms': 'JPL.NS',
+      'reliance': 'RELIANCE.NS',
+      'ril': 'RELIANCE.NS',
+      'tata motors': 'TATAMOTORS.NS',
+      'tatamotors': 'TATAMOTORS.NS',
+      'tcs': 'TCS.NS',
+      'infosys': 'INFY.NS',
+      'infy': 'INFY.NS',
+      'hdfc': 'HDFCBANK.NS',
+      'hdfc bank': 'HDFCBANK.NS',
+      'icici': 'ICICIBANK.NS',
+      'icici bank': 'ICICIBANK.NS',
+      'sbi': 'SBIN.NS',
+      'state bank of india': 'SBIN.NS',
+      'airtel': 'BHARTIARTL.NS',
+      'bharti airtel': 'BHARTIARTL.NS',
+      'itc': 'ITC.NS',
+      'wipro': 'WIPRO.NS',
+      'zomato': 'ZOMATO.NS',
+      'paytm': 'PAYTM.NS',
+      'adani': 'ADANIENT.NS',
+      'adani enterprises': 'ADANIENT.NS',
+      'adani ports': 'ADANIPORTS.NS',
+      'bajaj finance': 'BAJFINANCE.NS',
+      'kotak': 'KOTAKBANK.NS',
+      'kotak bank': 'KOTAKBANK.NS',
+      'maruti': 'MARUTI.NS',
+      'maruti suzuki': 'MARUTI.NS',
+      'l&t': 'LT.NS',
+      'larsen': 'LT.NS',
+      'larsen & toubro': 'LT.NS'
+    };
+
+    if (COMMON_TICKERS[normalizedKey]) {
+      return COMMON_TICKERS[normalizedKey];
+    }
+
     try {
       const { getProxyUrl } = await import('./lib/api');
       const growwUrl = `https://groww.in/v1/api/search/v3/query/global/st_p_query?page=0&query=${encodeURIComponent(query)}&size=5&web=true`;

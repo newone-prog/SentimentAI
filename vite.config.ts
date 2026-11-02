@@ -159,6 +159,28 @@ export default defineConfig(({ mode }) => {
             'Accept': '*/*'
           }
         },
+        '/api/alphavantage': {
+          target: 'https://www.alphavantage.co',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/alphavantage/, ''),
+        },
+        '/api/fmp': {
+          target: 'https://financialmodelingprep.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/fmp/, ''),
+        },
+        '/api/tavily': {
+          target: 'https://api.tavily.com',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/tavily/, ''),
+        },
+        '/api/codex': {
+          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api\/codex/, '/codex'),
+          proxyTimeout: 120000,
+          timeout: 120000,
+        },
       }
     }
   };
