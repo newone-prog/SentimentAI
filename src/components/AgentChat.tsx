@@ -3,6 +3,7 @@ import { Bot, X, Send, Loader2, Search, Globe, BarChart3, PieChart, TrendingUp, 
 import { runAgentStream, saveUserMessage, saveAssistantMessage, loadAgentMemory, saveAgentMemory, type ChatMessage, type ToolActivity, type SourceRef } from '../lib/agent/agentService';
 import { NEMOTRON_MODELS } from '../lib/apiConfig';
 import { useAuth } from '../lib/useAuth';
+import { AgentMessageRenderer } from './AgentMessageRenderer';
 import './AgentChat.css';
 
 const TOOL_META: Record<string, { icon: React.ReactNode; label: string }> = {
@@ -382,13 +383,31 @@ export const AgentChat: React.FC = () => {
                     </div>
                   )}
                   <div className="agent-msg-text">
-                    {i === messages.length - 1 && msg.role === 'assistant' && isThinking && streamingContent
-                      ? streamingContent + '<span class="cursor-blink">▌</span>'
-                      : msg.content}
+                    <AgentMessageRenderer
+                      content={i === messages.length - 1 && msg.role === 'assistant' && isThinking && streamingContent ? streamingContent : msg.content}
+                      isStreaming={i === messages.length - 1 && msg.role === 'assistant' && isThinking && !!streamingContent}
+                      isUser={msg.role === 'user'}
+                    />
                   </div>
                   {msg.sources && msg.sources.length > 0 && (
                     <div className="agent-msg-sources">
-                      Sources: {msg.sources.map(s => <span key={`${s.type}:${s.domain}`} className="agent-inline-source" title={`${s.name} (${s.domain})`}>{s.name}</span>).join(', ')}
+                      <span className="text-[10px] text-white/40 mr-1 font-semibold uppercase tracking-wider">Sources:</span>
+                      {msg.sources.map((s, sIdx) => (
+                        <React.Fragment key={`${s.type}:${s.domain}-${sIdx}`}>
+                          {sIdx > 0 && <span className="text-white/20 mx-1">•</span>}
+                          <span className="agent-inline-source inline-flex items-center gap-1" title={`${s.name} (${s.domain})`}>
+                            {s.favicon && (
+                              <img
+                                src={s.favicon}
+                                alt=""
+                                className="w-2.5 h-2.5 rounded-sm inline"
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            )}
+                            <span>{s.name}</span>
+                          </span>
+                        </React.Fragment>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -406,7 +425,11 @@ export const AgentChat: React.FC = () => {
                     <Loader2 className="w-4 h-4 animate-spin text-[#C4A77D]" />
                     <span>{progress || 'Thinking...'}</span>
                   </div>
-                  {streamingContent && <div className="agent-streaming-preview" dangerouslySetInnerHTML={{ __html: streamingContent + '<span class="cursor-blink">▌</span>' }} />}
+                  {streamingContent && (
+                    <div className="agent-streaming-preview mt-2">
+                      <AgentMessageRenderer content={streamingContent} isStreaming={true} />
+                    </div>
+                  )}
                 </div>
               </div>
             )}

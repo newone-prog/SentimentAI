@@ -46,7 +46,7 @@
   bottom: 92px;
   right: 24px;
   z-index: 9999;
-  width: min(440px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 32px));
   height: min(680px, calc(100vh - 120px));
   background: #0F0F0F;
   border: 1px solid rgba(196, 167, 125, 0.2);
@@ -370,8 +370,17 @@
 }
 
 .agent-msg-text {
-  white-space: pre-wrap;
   word-break: break-word;
+  width: 100%;
+}
+
+.agent-ui-card {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.agent-ui-card:hover {
+  border-color: rgba(196, 167, 125, 0.4);
 }
 
 /* ─── STREAMING CURSOR ─── */

@@ -552,8 +552,12 @@ export const runAgentStream = async (
       if (toolCalls.length === 0) {
         const allSources: SourceRef[] = [];
         allToolActivity.forEach(a => a.sources?.forEach(s => allSources.push(s)));
+        const cleanContent = finalContent
+          .replace(/Sources:\s*(\[object Object\](,\s*)?)+/gi, '')
+          .replace(/\s*Sources:\s*$/i, '')
+          .trim();
         callbacks.onComplete({
-          content: finalContent.trim(),
+          content: cleanContent,
           toolActivity: allToolActivity,
           sources: allSources,
           sourceMap
