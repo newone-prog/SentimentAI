@@ -317,23 +317,23 @@ You have data from 5 independent sources: Yahoo Finance, TradingView, MarketStac
 - If MarketStack and Yahoo disagree on price, note the discrepancy and use the more recent source
 - When full article content is provided, analyze the substance of the article, not just the headline
 
-[TASK] Write a comprehensive equity research report in 5 sections. Use === before each section header (e.g. === EXECUTIVE SUMMARY ===):
+[TASK] Write an exhaustive, highly detailed equity research report in 5 sections. Do NOT write 1-2 sentence summaries. Every section MUST be a detailed, multi-paragraph breakdown (minimum 150-250 words per section) packed with concrete numbers, percentages, and strategic institutional analysis. Use === before each section header (e.g. === EXECUTIVE SUMMARY ===):
 
-1. EXECUTIVE SUMMARY (2-3 sentences): Key long-term verdict and why. State your verdict clearly.
+1. EXECUTIVE SUMMARY (3-4 substantive paragraphs): Synthesize the macroeconomic environment, current spot price, volume, 52-week position, and the overarching institutional verdict with clear reasoning.
 
-2. VALUATION & LONG-TERM TREND: Analyze the broader price trend in the context of valuation. Identify long-term structural support levels. Contrast short-term technical noise (RSI, Stochastic) with the 200-day moving average and long-term consolidation patterns.
+2. VALUATION & LONG-TERM TREND (3-4 substantive paragraphs): Deep analysis of the price structure relative to valuation. Examine the 20-day EMA, 50-day SMA, and 200-day moving average. Detail RSI divergence, Stochastic readings, MACD momentum, ATR volatility, and exact structural support and resistance levels.
 
-3. FUNDAMENTAL & NEWS ANALYSIS: Analyze each news item's impact on intrinsic value. Explain WHY each event affects the stock's multi-year moat — sector trends, regulatory changes, macro factors. Reference the source of each data point.
+3. FUNDAMENTAL & NEWS ANALYSIS (3-4 substantive paragraphs): Deep fundamental evaluation covering operating margins, revenue trajectory, P/E and P/B multiples, debt-to-equity resilience, and economic moat. Cross-examine recent news items and explain their tangible impact on multi-year intrinsic cash flows.
 
-4. INSTITUTIONAL SENTIMENT & MARGIN OF SAFETY: How is the broader market pricing this asset? Are retail traders panic selling (creating a discount/margin of safety) or is there FOMO (creating overvaluation)? Analyze if smart money is accumulating. 
+4. INSTITUTIONAL SENTIMENT & MARGIN OF SAFETY (2-3 substantive paragraphs): Forensic analysis of market psychology using the Fear & Greed Index, Social Heat score, and institutional accumulation signatures versus retail distribution. Assess whether current pricing offers an asymmetric margin of safety.
 
-5. INVESTMENT THESIS: Should a long-term investor ACCUMULATE, HOLD, or REDUCE? Discuss intrinsic value margin of safety and multi-year growth runway instead of short-term entry/exit levels. State structural risk factors. End with a mandatory disclaimer.
+5. INVESTMENT THESIS & EXECUTION BLUEPRINT (3-4 substantive paragraphs): Clear strategic plan specifying an exact Accumulation Buy Zone, 1-Year Tactical Target Price, 3-Year Strategic Target Price, Structural Hard Stop-Loss level, Risk-to-Reward ratio, and position sizing recommendations. End with risk disclosures.
 
 [CRITICAL VERDICT RULES — VALUE AWARE]
 - If fundamental value is strong but short-term technicals are weak (oversold, fear): lean ACCUMULATE (buying at a discount)
 - If fundamental value is weak but short-term technicals are strong (overbought, greed): lean REDUCE (selling into the hype)
 - If price is falling but structural thesis is intact: lean ACCUMULATE
-- Do not provide short-term day-trading entry/exit levels.
+- Do not provide short-term day-trading entry/exit levels. Focus on 1-3 year wealth creation.
 - Your confidence must be between 0 and 100
 
 [OUTPUT FORMAT — STRICT RULES]
@@ -341,7 +341,7 @@ Return ONLY a valid JSON object. No markdown code blocks. No backticks. No comme
 All newlines inside string values MUST be escaped as \\n.
 No trailing commas.
 The JSON object must be exactly:
-{"reasoning":"5-6 line executive summary","verdict":"BULLISH","confidence":75,"emotionalContext":"One-line market emotion","disclaimer":"AI-generated analysis. Not financial advice. Invest at your own risk.","researchPaper":"Full research report with === section headers and \\n\\n paragraph breaks. 1-2 pages. Every claim must cite data source."}
+{"reasoning":"Extensive 6-8 line executive summary synthesizing quantitative findings","verdict":"BULLISH","confidence":75,"emotionalContext":"One-line market emotion","disclaimer":"AI-generated institutional analysis. Not financial advice. Invest at your own risk.","researchPaper":"Full exhaustive research report with === section headers and \\n\\n paragraph breaks. Minimum 1000-1500 words. Every claim must cite specific numerical data."}
 
 IMPORTANT: The "verdict" field must be exactly one of these three strings: "BULLISH", "BEARISH", or "NEUTRAL". Choose based on the data — do NOT default to NEUTRAL.
 IMPORTANT: The "confidence" field must be an integer between 0 and 100.
