@@ -143,8 +143,16 @@ const callLLMStream = async (
   const body: any = { model, messages, temperature: 0.2, max_tokens: 8192, stream: true };
   if (useTools) { body.tools = TOOL_DEFINITIONS; body.tool_choice = 'auto'; }
 
+  console.log(`[Agent] Calling ${provider} streaming...`, { model, url, hasTools: useTools });
+
   const res = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`${provider} LLM failed (${res.status})`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[Agent] ${provider} LLM failed (${res.status}):`, errText);
+    throw new Error(`${provider} LLM failed (${res.status}): ${errText}`);
+  }
+
+  console.log(`[Agent] ${provider} streaming response OK`);
 
   let fullContent = '';
   let toolCalls: any[] = [];
@@ -155,9 +163,11 @@ const callLLMStream = async (
   if (!reader) throw new Error('No response body');
 
   const decoder = new TextDecoder();
+  let chunkCount = 0;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
+    chunkCount++;
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() || '';
@@ -187,9 +197,13 @@ const callLLMStream = async (
             }
           }
         }
-      } catch {}
+      } catch (e) {
+        console.warn('[Agent] Failed to parse streaming chunk:', line, e);
+      }
     }
   }
+
+  console.log(`[Agent] Streaming complete: ${chunkCount} chunks, content length: ${fullContent.length}, toolCalls: ${toolCalls.length}`);
 
   if (currentToolCall) toolCalls.push(currentToolCall);
   return { content: fullContent, toolCalls };
@@ -268,7 +282,7 @@ export const loadRecentChatHistory = async (userId: string, limitCount: number =
   }
 };
 
-// ─── MAIN AGENT LOOP ───
+// ─── MAIN AGENT LOOP WITH FALLBACK ───
 
 export const runAgentStream = async (
   userMessage: string,
@@ -296,13 +310,37 @@ export const runAgentStream = async (
 
   let finalContent = '';
   let lastError: Error | null = null;
+  let streamingFailed = false;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
     try {
       callbacks.onProgress(iteration === 0 ? 'Thinking...' : `Analyzing... (step ${iteration + 1})`);
 
-      const { content, toolCalls } = await callLLMStream(messages, true, provider, callbacks);
+      let content = '';
+      let toolCalls: any[] = [];
+
+      if (!streamingFailed) {
+        try {
+          const result = await callLLMStream(messages, true, provider, callbacks);
+          content = result.content;
+          toolCalls = result.toolCalls;
+        } catch (streamErr: any) {
+          console.warn('[Agent] Streaming failed, falling back to non-streaming:', streamErr.message);
+          streamingFailed = true;
+          // Fall through to non-streaming
+        }
+      }
+
+      if (streamingFailed || content === '') {
+        // Non-streaming fallback
+        console.log('[Agent] Using non-streaming fallback');
+        const response = await callLLMNonStream(messages, true, provider);
+        content = response.content || '';
+        toolCalls = response.tool_calls || [];
+      }
+
       finalContent += content;
+      console.log(`[Agent] Iteration ${iteration + 1}: content length ${content.length}, toolCalls: ${toolCalls.length}`);
 
       if (toolCalls.length === 0) {
         // Collect all sources from tool activities
@@ -348,8 +386,15 @@ export const runAgentStream = async (
       }
     } catch (e: any) {
       lastError = e;
-      console.warn(`[Agent] ${provider} failed:`, e.message);
-      if (provider === 'nvidia' && API_CONFIG.OPENROUTER_KEY) {
+      console.error(`[Agent] Iteration ${iteration + 1} error:`, e);
+      if (provider === 'nvidia' && API_CONFIG.OPENROUTER_KEY && !streamingFailed) {
+        console.warn('[Agent] Switching to OpenRouter...');
+        provider = 'openrouter';
+        streamingFailed = false; // Try streaming again with new provider
+        continue;
+      }
+      if (provider === 'nvidia' && API_CONFIG.OPENROUTER_KEY && streamingFailed) {
+        console.warn('[Agent] Switching to OpenRouter (non-streaming)...');
         provider = 'openrouter';
         continue;
       }
@@ -362,7 +407,15 @@ export const runAgentStream = async (
     return;
   }
 
-  callbacks.onComplete({ content: finalContent, toolActivity: allToolActivity, sources: [], sourceMap: new Map() });
+  // If we got here without completing, return what we have
+  const allSources: SourceRef[] = [];
+  allToolActivity.forEach(a => a.sources?.forEach(s => allSources.push(s)));
+  callbacks.onComplete({
+    content: finalContent.trim() || 'Agent completed but returned no content.',
+    toolActivity: allToolActivity,
+    sources: allSources,
+    sourceMap
+  });
 };
 
 // ─── NON-STREAM FALLBACK ───

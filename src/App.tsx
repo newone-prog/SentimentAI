@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState, useLayoutEffect, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
   TrendingUp, TrendingDown, Search, ArrowRight, Newspaper,
-  Activity, ChevronRight, Sparkles, Zap, Globe, BookOpen, X, FileText,
+  Activity, ChevronRight, Sparkles, Zap, Globe, BookOpen,
   ShieldAlert, AlertTriangle, LogIn, Loader2, ExternalLink, Tag
 } from 'lucide-react';
 import './App.css';
@@ -12,6 +12,7 @@ import { fetchStockData, fetchNewsAndSentiment, fetchLivePrice, searchMutualFund
 import { Navigation } from './components/Navigation';
 import { TerminalView } from './components/TerminalView';
 import { AgentChat } from './components/AgentChat';
+import { FloatingResearchReport } from './components/FloatingResearchReport';
 import { type DevilsAdvocateResponse } from './lib/terminalService';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -585,86 +586,8 @@ const MarketNarrativeSection = ({ stockName, newsList, isLoading }: { stockName?
   );
 };
 
-// Research Dialog
-const ResearchDialog = ({ isOpen, onClose, researchPaper, stockName, source }: { isOpen: boolean; onClose: () => void; researchPaper: string; stockName: string; source: string }) => {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const dragStartY = useRef(0);
-  const currentDragY = useRef(0);
-  const isDragging = useRef(false);
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  const handleClose = useCallback(() => onClose(), [onClose]);
-
-  useEffect(() => {
-    if (isOpen) { document.body.style.overflow = 'hidden'; document.body.style.paddingRight = `${window.innerWidth - document.documentElement.clientWidth}px`; }
-    else { document.body.style.overflow = ''; document.body.style.paddingRight = ''; }
-    return () => { document.body.style.overflow = ''; document.body.style.paddingRight = ''; };
-  }, [isOpen]);
-  useEffect(() => { if (!isOpen) return; const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClose(); }; window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey); }, [isOpen, handleClose]);
-
-  const handleTouchStart = (e: React.TouchEvent) => { if (!scrollRef.current) return; if (scrollRef.current.scrollTop > 0) return; dragStartY.current = e.touches[0].clientY; currentDragY.current = 0; isDragging.current = true; };
-  const handleTouchMove = (e: React.TouchEvent) => { if (!isDragging.current) return; const delta = e.touches[0].clientY - dragStartY.current; if (delta > 0) { currentDragY.current = delta; if (dialogRef.current) { dialogRef.current.style.transform = `translateY(${delta}px)`; dialogRef.current.style.transition = 'none'; } if (overlayRef.current) overlayRef.current.style.background = `rgba(0, 0, 0, ${Math.max(0.1, 0.6 - delta / 400)})`; } };
-  const handleTouchEnd = () => { if (!isDragging.current) return; isDragging.current = false; if (dialogRef.current) { dialogRef.current.style.transition = ''; dialogRef.current.style.transform = ''; } if (overlayRef.current) overlayRef.current.style.background = ''; if (currentDragY.current > 120) handleClose(); };
-
-  if (!isOpen) return null;
-
-  const renderPaper = (text: any) => {
-    let processText = typeof text === 'string' ? text : '';
-    if (typeof text === 'object' && text !== null) {
-      if (Array.isArray(text)) {
-        processText = text.join('\n\n');
-      } else {
-        processText = Object.entries(text).map(([k, v]) => `### ${k}\n${v}`).join('\n\n');
-      }
-    } else if (typeof text !== 'string') {
-      processText = String(text || '');
-    }
-    
-    const splitRegex = processText.includes('###') ? /(?:^|\n)###\s+/ : /={3}\s*/;
-    const sections = processText.split(splitRegex);
-    return sections.filter(s => s.trim()).map((section, i) => {
-      const lines = section.trim().split('\n');
-      let title = lines[0].replace(/\s*={1,3}\s*/g, '').trim();
-      title = title.replace(/\*\*/g, ''); // Remove bold asterisks from title
-      const body = lines.slice(1).join('\n').trim();
-      if (!title && !body) return null;
-      return (
-        <div key={i} className="research-section mb-6">
-          {title && <h3 className="research-section-title font-bold text-[#0A0A0A]">{title}</h3>}
-          {body && body.split('\n').filter(Boolean).map((p, j) => {
-            const parts = p.trim().split(/(\*\*.*?\*\*)/g);
-            return (
-              <p key={j} className="research-paragraph">
-                {parts.map((part, k) => part.startsWith('**') && part.endsWith('**') ? <strong key={k} className="font-bold text-[#0A0A0A]">{part.slice(2, -2)}</strong> : part)}
-              </p>
-            );
-          })}
-        </div>
-      );
-    });
-  };
-
-  return (
-    <div ref={overlayRef} className="research-overlay" onClick={handleClose}>
-      <div ref={dialogRef} className="research-dialog" onClick={e => e.stopPropagation()} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
-        <div className="research-dialog-handle" />
-        <div className="research-dialog-header">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#C4A77D]/10 flex items-center justify-center"><FileText className="w-5 h-5 text-[#C4A77D]" /></div>
-            <div><h2 className="text-lg font-display text-[#0A0A0A] leading-tight">{stockName}</h2><span className="text-xs text-[#6B6B6B] font-mono">Equity Research Report</span></div>
-          </div>
-          <button onClick={handleClose} className="research-close-btn" aria-label="Close"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="research-dialog-source"><Sparkles className="w-3 h-3 text-[#C4A77D]" /><span>AI Engine: {source}</span></div>
-        <div ref={scrollRef} className="research-dialog-body">{renderPaper(researchPaper)}</div>
-<div className="research-dialog-footer">
-          <p className="text-[10px] text-[#9A9A9A] font-mono uppercase tracking-wider leading-relaxed">AI-generated research. Data sourced from Yahoo Finance, TradingView Scanner, MarketStack, Indian Stock API, GNews & MediaStack APIs. Not financial advice. Invest at your own risk.</p>
-        </div>
-      </div>
-    </div>
-  );
-};
+// Research Dialog: Floating Fixed popup scrollable window; main website remains scrollable concurrently
+const ResearchDialog = FloatingResearchReport;
 
 
 const FinalVerdictSection = ({ ticker, stockName, sentimentStats, stockData, analysisMode, mutualFundData, optionsChainData, onOpenTerminal, setDaCache }: { ticker: string; stockName: string; sentimentStats: SentimentAnalysis | null; stockData: StockData | null; analysisMode: 'INVESTOR' | 'TRADER' | 'MUTUAL_FUND'; mutualFundData?: MutualFundDetails; optionsChainData?: OptionsChainResponse | null; onOpenTerminal: (q: string) => void; setDaCache: (da: DevilsAdvocateResponse | null) => void; }) => {

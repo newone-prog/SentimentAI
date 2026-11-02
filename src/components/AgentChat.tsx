@@ -102,10 +102,20 @@ export const AgentChat: React.FC = () => {
         user.uid,
         effort,
         {
-          onToken: (token) => setStreamingContent(prev => prev + token),
-          onToolActivity: (activity) => setPendingTools(prev => [...prev, activity]),
-          onProgress: (status) => setProgress(status),
+          onToken: (token) => {
+            console.log('[Chat] onToken:', token.length);
+            setStreamingContent(prev => prev + token);
+          },
+          onToolActivity: (activity) => {
+            console.log('[Chat] onToolActivity:', activity.tool, activity.summary);
+            setPendingTools(prev => [...prev, activity]);
+          },
+          onProgress: (status) => {
+            console.log('[Chat] onProgress:', status);
+            setProgress(status);
+          },
           onComplete: async (result) => {
+            console.log('[Chat] onComplete:', result.content.length, 'toolActivity:', result.toolActivity.length);
             const assistantMsg: ChatMessage = {
               role: 'assistant',
               content: result.content,
@@ -125,6 +135,7 @@ export const AgentChat: React.FC = () => {
             setSourceMap(result.sourceMap);
           },
           onError: async (error) => {
+            console.error('[Chat] onError:', error);
             const errMsg: ChatMessage = { role: 'assistant', content: `Agent error: ${error.message}. Please try again.`, timestamp: Date.now() };
             setMessages(prev => [...prev, errMsg]);
             await saveAssistantMessage(user.uid, errMsg);
@@ -134,6 +145,7 @@ export const AgentChat: React.FC = () => {
         }
       );
     } catch (e: any) {
+      console.error('[Chat] handleSend error:', e);
       const errMsg: ChatMessage = { role: 'assistant', content: `Agent error: ${e.message}`, timestamp: Date.now() };
       setMessages(prev => [...prev, errMsg]);
       await saveAssistantMessage(user.uid, errMsg);
