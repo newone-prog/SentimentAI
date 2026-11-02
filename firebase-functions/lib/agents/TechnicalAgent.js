@@ -30,7 +30,9 @@ class TechnicalAgent {
             conclusion += `A ${patterns[0]} pattern is currently developing. `;
         }
         // 3. Actionable Levels
-        conclusion += `From an actionable standpoint, immediate downside support rests at ${support[0] || 'N/A'}. A confirmed break below this invalidates the near-term structure. Conversely, overhead supply (resistance) sits at ${resistance[0] || 'N/A'}. Clearing this supply zone on expanding volume would mathematically confirm the next leg of price discovery.`;
+        const supportLevel = Array.isArray(support) ? support[0] : (support || 'N/A');
+        const resistanceLevel = Array.isArray(resistance) ? resistance[0] : (resistance || 'N/A');
+        conclusion += `From an actionable standpoint, immediate downside support rests at ${supportLevel}. A confirmed break below this invalidates the near-term structure. Conversely, overhead supply (resistance) sits at ${resistanceLevel}. Clearing this supply zone on expanding volume would mathematically confirm the next leg of price discovery.`;
         return {
             technicalConclusion: conclusion,
             actionableAdvice: trend === "Bullish" ? "Buy on dips near support" : (trend === "Bearish" ? "Avoid or short near resistance" : "Hold / Wait for breakout"),
