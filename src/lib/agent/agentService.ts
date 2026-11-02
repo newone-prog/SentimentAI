@@ -219,22 +219,36 @@ export const loadAgentMemory = async (userId: string): Promise<AgentMemory | nul
     const docRef = doc(db, 'agent_memory', userId);
     const snap = await getDoc(docRef);
     if (snap.exists()) return snap.data() as AgentMemory;
-    return null;
-  } catch { return null; }
+  } catch {}
+  try {
+    const local = localStorage.getItem(`agent_memory_${userId}`);
+    if (local) return JSON.parse(local);
+  } catch {}
+  return null;
 };
 
 export const saveAgentMemory = async (memory: AgentMemory): Promise<void> => {
   try {
+    localStorage.setItem(`agent_memory_${memory.userId}`, JSON.stringify(memory));
+  } catch {}
+  try {
     const docRef = doc(db, 'agent_memory', memory.userId);
     await setDoc(docRef, { ...memory, updatedAt: serverTimestamp() }, { merge: true });
-  } catch (e) { console.warn('[Agent] Memory save failed:', e); }
+  } catch {}
 };
 
 export const appendToChatHistory = async (userId: string, message: ChatMessage): Promise<void> => {
   try {
+    const key = `agent_chat_${userId}`;
+    const existing = JSON.parse(localStorage.getItem(key) || '[]');
+    existing.push(message);
+    if (existing.length > 50) existing.splice(0, existing.length - 50);
+    localStorage.setItem(key, JSON.stringify(existing));
+  } catch {}
+  try {
     const historyRef = collection(db, 'agent_memory', userId, 'chat_history');
     await setDoc(doc(historyRef), { ...message, timestamp: serverTimestamp() });
-  } catch (e) { console.warn('[Agent] Chat history append failed:', e); }
+  } catch {}
 };
 
 export const loadRecentChatHistory = async (userId: string, limitCount: number = 20): Promise<ChatMessage[]> => {
@@ -243,7 +257,15 @@ export const loadRecentChatHistory = async (userId: string, limitCount: number =
     const q = query(historyRef, orderBy('timestamp', 'desc'), limit(limitCount));
     const snap = await fsGetDocs(q);
     return snap.docs.map(d => d.data() as ChatMessage).reverse();
-  } catch { return []; }
+  } catch {
+    try {
+      const key = `agent_chat_${userId}`;
+      const local = JSON.parse(localStorage.getItem(key) || '[]');
+      return local.slice(-limitCount);
+    } catch {
+      return [];
+    }
+  }
 };
 
 // ─── MAIN AGENT LOOP ───

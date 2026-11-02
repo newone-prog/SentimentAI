@@ -392,9 +392,7 @@ export const fetchMarketStackData = async (ticker: string, onProgress?: (step: s
     const key = API_CONFIG.MARKETSTACK_API_KEY;
     const results: MarketStackData = { eod: [], splits: [], dividends: [] };
 
-    const eodUrl = import.meta.env.DEV
-      ? `/api/marketstack/v1/eod?access_key=${key}&symbols=${symbol}&limit=30`
-      : `http://api.marketstack.com/v1/eod?access_key=${key}&symbols=${symbol}&limit=30`;
+    const eodUrl = `/api/marketstack/v1/eod?access_key=${key}&symbols=${symbol}&limit=30`;
     console.info(`[MarketStack] Fetching EOD for ${symbol}...`);
     try {
       const eodRes = await fetchWithTimeout(eodUrl, {}, 12000);
@@ -414,9 +412,7 @@ export const fetchMarketStackData = async (ticker: string, onProgress?: (step: s
 
     // Corporate actions (splits & dividends) are unsupported on free tiers and return 422 for .XNSE/.XBOM
     if (!symbol.endsWith('.XNSE') && !symbol.endsWith('.XBOM')) {
-      const splitsUrl = import.meta.env.DEV
-        ? `/api/marketstack/v1/splits?access_key=${key}&symbols=${symbol}&limit=10`
-        : `http://api.marketstack.com/v1/splits?access_key=${key}&symbols=${symbol}&limit=10`;
+      const splitsUrl = `/api/marketstack/v1/splits?access_key=${key}&symbols=${symbol}&limit=10`;
       try {
         const splitsRes = await fetchWithTimeout(splitsUrl, {}, 8000);
         if (splitsRes.ok) {
@@ -425,9 +421,7 @@ export const fetchMarketStackData = async (ticker: string, onProgress?: (step: s
         }
       } catch (error) {}
 
-      const divUrl = import.meta.env.DEV
-        ? `/api/marketstack/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`
-        : `http://api.marketstack.com/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`;
+      const divUrl = `/api/marketstack/v1/dividends?access_key=${key}&symbols=${symbol}&limit=10`;
       try {
         const divRes = await fetchWithTimeout(divUrl, {}, 8000);
         if (divRes.ok) {
@@ -742,9 +736,7 @@ export const fetchGNewsArticles = async (query: string, companyName: string): Pr
   try {
     const queryTerm = companyName || query;
     const strictNewsQuery = `"${queryTerm}" AND (stock OR share OR market)`;
-    const gNewsUrl = import.meta.env.DEV
-      ? `/api/gnews/v4/search?q=${encodeURIComponent(strictNewsQuery)}&lang=en&max=15&apikey=${API_CONFIG.GNEWS_API_KEY}`
-      : `https://gnews.io/api/v4/search?q=${encodeURIComponent(strictNewsQuery)}&lang=en&max=15&apikey=${API_CONFIG.GNEWS_API_KEY}`;
+    const gNewsUrl = `/api/gnews/v4/search?q=${encodeURIComponent(strictNewsQuery)}&lang=en&max=15&apikey=${API_CONFIG.GNEWS_API_KEY}`;
 
     const gNewsRes = await fetchWithTimeout(gNewsUrl, {}, 10000);
 
@@ -803,12 +795,7 @@ export const fetchNewsAndSentiment = async (searchQuery: string, companyName?: s
           if (mediaRes.status === 429) {
             console.warn("MediaStack Rate Limited (429). Bypassing...");
           } else if (mediaRes.ok) {
-            let mediaData;
-            if (import.meta.env.DEV) mediaData = await mediaRes.json();
-            else {
-              const wrapper = await mediaRes.json();
-              if (wrapper.contents) mediaData = JSON.parse(wrapper.contents);
-            }
+            const mediaData = await safeJsonParse(mediaRes);
             if (mediaData && mediaData.data) {
               rawArticles = mediaData.data.map((item: any) => ({
                 title: item.title,

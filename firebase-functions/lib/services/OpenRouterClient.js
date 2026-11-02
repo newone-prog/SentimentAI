@@ -28,7 +28,7 @@ class OpenRouterClient {
                         'Authorization': `Bearer ${nvidiaKey}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 180000
+                    timeout: 6000
                 });
                 const choice = response.data?.choices?.[0]?.message;
                 const content = choice?.content || choice?.reasoning_content || choice?.reasoning;
@@ -45,7 +45,7 @@ class OpenRouterClient {
             try {
                 console.log(`[Backend OpenRouterClient] Calling OpenRouter using ${model}...`);
                 const response = await axios_1.default.post('https://openrouter.ai/api/v1/chat/completions', {
-                    model,
+                    model: 'meta-llama/llama-3.2-3b-instruct:free',
                     messages: [
                         { role: 'system', content: systemPrompt },
                         { role: 'user', content: prompt }
@@ -58,7 +58,7 @@ class OpenRouterClient {
                         'Authorization': `Bearer ${openrouterKey}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 180000
+                    timeout: 6000
                 });
                 const choice = response.data?.choices?.[0]?.message;
                 const content = choice?.content || choice?.reasoning_content || choice?.reasoning;
