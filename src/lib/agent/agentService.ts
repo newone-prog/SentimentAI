@@ -1,4 +1,4 @@
-import { API_CONFIG, NEMOTRON_MODEL } from '../apiConfig';
+import { API_CONFIG, DEFAULT_MODEL } from '../apiConfig';
 import { TOOL_DEFINITIONS, TOOL_EXECUTORS, type ToolResult, type SourceRef } from './agentTools';
 
 export type { SourceRef };
@@ -69,16 +69,61 @@ const EFFORT_SYSTEM_PROMPTS = {
 - If tool fails, adapt: try different tool/query. Never give up without alternatives.
 - Use execute_code for ANY computation: custom indicators, backtests, portfolio math, statistical tests.
 
+## DYNAMIC UI RENDERING (CRITICAL)
+You can render interactive UI components directly in the chat by using execute_code to emit UI actions. The chat interface will render these automatically.
+
+### Available UI Actions (emit via sys.emit_ui() in Python or return from JS):
+- **table**: Sortable, filterable, paginated data tables
+- **chart**: Chart.js line/bar/area/scatter charts
+- **metric_cards**: KPI metric cards grid
+- **comparison**: Side-by-side comparison tables
+- **timeline**: Timeline of events
+- **html**: Custom HTML (sanitized)
+
+### Python Helpers (available in execute_code):
+\`\`\`python
+sys.ui_table(title, data, columns=None, sortable=True, filterable=True, pageSize=10)
+sys.ui_chart(title, data, chart_type='line', x_key=None, y_keys=None, color_key=None, height=300)
+sys.ui_metric_cards(title, metrics)
+sys.ui_comparison(title, items, keys)
+sys.ui_timeline(title, events)
+sys.ui_html(title, html)
+sys.emit_ui(action)  # emit any UI action
+\`\`\`
+
+### JavaScript Helpers (available in execute_code):
+\`\`\`javascript
+uiTable(title, data, columns?)
+uiChart(title, data, chartType, xKey, yKeys, height)
+uiMetricCards(title, metrics)
+uiComparison(title, items, keys)
+uiTimeline(title, events)
+uiHTML(title, html)
+\`\`\`
+
+**YOU MUST USE THESE** for any tabular data, charts, metrics, comparisons, or timelines. Do NOT output raw markdown tables or plain text lists when a UI component would be better.
+
+## SOURCE CITATION (CRITICAL)
+- Every factual claim MUST cite its source using the format: \`[Source Name]\`
+- Sources are provided with each tool result — use the exact \`name\` field from the source
+- Format: \`RSI is 75.98 [Yahoo Finance]\`, \`News sentiment is positive [GNews]\`
+- **DO NOT include a "Sources" section at the end of your response** — the UI automatically displays sources from tool activity
+- **NEVER include source objects in your response text** — they are handled by the UI separately
+- **NEVER output \`[object Object]\` or raw source objects** — the UI handles source display automatically
+- Only cite sources by their \`name\` field in square brackets within your analysis text
+
 ## RESPONSE STYLE
 - Decisive, precise, data-driven. Cite specific numbers.
 - Structure long answers: verdict, technicals, sentiment, risks.
 - Always state final view: BULLISH / BEARISH / NEUTRAL with reasoning.
 - Add disclaimer: "Not financial advice."
 - Keep conversational replies short. Deep-dives get deep answers.
+- **USE UI COMPONENTS** for data presentation — tables, charts, metrics, comparisons.
 
 ## IMPORTANT
 - Never fabricate data. If you don't have data, say so or fetch it.
-- Lead with verdict, then key numbers, then reasoning.`,
+- Lead with verdict, then key numbers, then reasoning.
+- USE UI COMPONENTS for data presentation.`,
 
   medium: `You are SentimentAI Agent (MEDIUM EFFORT MODE) — deeper reasoning, more thorough tool chaining, and explicit step-by-step analysis.
 
@@ -123,17 +168,18 @@ const fetchWithTimeout = async (url: string, options: RequestInit, timeout: numb
 const callLLMStream = async (
   messages: any[],
   useTools: boolean,
-  callbacks: StreamCallbacks
+  callbacks: StreamCallbacks,
+  modelId: string = DEFAULT_MODEL
 ): Promise<{ content: string; toolCalls: any[] }> => {
   const url = '/llm/nvidia';
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   headers['Authorization'] = `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`;
 
-  const body: any = { model: NEMOTRON_MODEL, messages, temperature: 0.2, max_tokens: 8192, stream: true };
+  const body: any = { model: modelId, messages, temperature: 0.2, max_tokens: 8192, stream: true };
   if (useTools) { body.tools = TOOL_DEFINITIONS; body.tool_choice = 'auto'; }
 
-  console.log(`[Agent] Calling NVIDIA Nemotron 3 Ultra streaming...`, { model: NEMOTRON_MODEL, url, hasTools: useTools });
+  console.log(`[Agent] Calling NVIDIA streaming...`, { model: modelId, url, hasTools: useTools });
 
   const res = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
   if (!res.ok) {
@@ -199,13 +245,17 @@ const callLLMStream = async (
   return { content: fullContent, toolCalls };
 };
 
-const callLLMNonStream = async (messages: any[], useTools: boolean): Promise<any> => {
+const callLLMNonStream = async (
+  messages: any[],
+  useTools: boolean,
+  modelId: string = DEFAULT_MODEL
+): Promise<any> => {
   const url = '/llm/nvidia';
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   headers['Authorization'] = `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`;
 
-  const body: any = { model: NEMOTRON_MODEL, messages, temperature: 0.2, max_tokens: 8192 };
+  const body: any = { model: modelId, messages, temperature: 0.2, max_tokens: 8192 };
   if (useTools) { body.tools = TOOL_DEFINITIONS; body.tool_choice = 'auto'; }
 
   console.log(`[Agent] Calling NVIDIA Nemotron 3 Ultra (non-streaming)...`);
@@ -358,8 +408,61 @@ export const runAgentStream = async (
   userMessage: string,
   userId: string,
   effort: 'default' | 'medium' | 'high',
-  callbacks: StreamCallbacks
+  callbacksOrModel: StreamCallbacks | string,
+  modelOrCallbacks?: string | StreamCallbacks
 ): Promise<void> => {
+  let rawCallbacks: StreamCallbacks;
+  let modelId: string = DEFAULT_MODEL;
+
+  if (typeof callbacksOrModel === 'string') {
+    modelId = callbacksOrModel;
+    rawCallbacks = (modelOrCallbacks as StreamCallbacks) || ({} as StreamCallbacks);
+  } else {
+    rawCallbacks = callbacksOrModel || ({} as StreamCallbacks);
+    if (typeof modelOrCallbacks === 'string') {
+      modelId = modelOrCallbacks;
+    }
+  }
+
+  // Safe wrapper guaranteeing callbacks never throw TypeError if missing
+  const callbacks: StreamCallbacks = {
+    onToken: (token: string) => {
+      try {
+        if (typeof rawCallbacks?.onToken === 'function') rawCallbacks.onToken(token);
+      } catch (err) {
+        console.warn('[Agent] onToken error:', err);
+      }
+    },
+    onToolActivity: (activity: ToolActivity) => {
+      try {
+        if (typeof rawCallbacks?.onToolActivity === 'function') rawCallbacks.onToolActivity(activity);
+      } catch (err) {
+        console.warn('[Agent] onToolActivity error:', err);
+      }
+    },
+    onProgress: (status: string) => {
+      try {
+        if (typeof rawCallbacks?.onProgress === 'function') rawCallbacks.onProgress(status);
+      } catch (err) {
+        console.warn('[Agent] onProgress error:', err);
+      }
+    },
+    onComplete: (result) => {
+      try {
+        if (typeof rawCallbacks?.onComplete === 'function') rawCallbacks.onComplete(result);
+      } catch (err) {
+        console.error('[Agent] onComplete error:', err);
+      }
+    },
+    onError: (error: Error) => {
+      try {
+        if (typeof rawCallbacks?.onError === 'function') rawCallbacks.onError(error);
+      } catch (err) {
+        console.error('[Agent] onError error:', err);
+      }
+    }
+  };
+
   const allToolActivity: ToolActivity[] = [];
   const sourceMap = new Map<string, SourceRef>();
 
@@ -389,7 +492,7 @@ export const runAgentStream = async (
 
       if (!streamingFailed) {
         try {
-          const result = await callLLMStream(messages, true, callbacks);
+          const result = await callLLMStream(messages, true, callbacks, modelId);
           content = result.content;
           toolCalls = result.toolCalls;
         } catch (streamErr: any) {
@@ -402,7 +505,7 @@ export const runAgentStream = async (
         // Non-streaming fallback
         console.log('[Agent] Using non-streaming fallback');
         try {
-          const response = await callLLMNonStream(messages, true);
+          const response = await callLLMNonStream(messages, true, modelId);
           content = response.content || '';
           toolCalls = response.tool_calls || [];
         } catch (nonStreamErr: any) {

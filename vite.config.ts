@@ -173,13 +173,19 @@ export default defineConfig(({ mode }) => {
           target: 'https://api.tavily.com',
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api\/tavily/, ''),
+          headers: {
+            'Authorization': `Bearer ${env.VITE_TAVILY_API_KEY || ''}`,
+          },
         },
-        '/api/codex': {
-          target: 'http://127.0.0.1:5001/sentimentai-48241/us-central1/api',
+        '/api/brave': {
+          target: 'https://api.search.brave.com',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api\/codex/, '/codex'),
-          proxyTimeout: 120000,
-          timeout: 120000,
+          rewrite: (path) => path.replace(/^\/api\/brave/, ''),
+          headers: {
+            'Authorization': `Bearer ${env.VITE_BRAVE_API_KEY || ''}`,
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip',
+          },
         },
       }
     }

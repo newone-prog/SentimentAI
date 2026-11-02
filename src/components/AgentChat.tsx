@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, X, Send, Loader2, Search, Globe, BarChart3, PieChart, TrendingUp, CheckCircle2, XCircle, Wrench, Trash2, Zap, Brain, ChevronRight, ExternalLink, Code2, Sparkles } from 'lucide-react';
-import { runAgentStream, saveUserMessage, saveAssistantMessage, loadAgentMemory, type ChatMessage, type ToolActivity, type SourceRef } from '../lib/agent/agentService';
+import { Bot, X, Send, Loader2, Search, Globe, BarChart3, PieChart, TrendingUp, CheckCircle2, XCircle, Wrench, Trash2, Zap, Brain, ChevronDown, ExternalLink, Code2, Sparkles, Cpu } from 'lucide-react';
+import { runAgentStream, saveUserMessage, saveAssistantMessage, loadAgentMemory, saveAgentMemory, type ChatMessage, type ToolActivity, type SourceRef } from '../lib/agent/agentService';
+import { NEMOTRON_MODELS } from '../lib/apiConfig';
 import { useAuth } from '../lib/useAuth';
 import './AgentChat.css';
 
@@ -30,6 +31,16 @@ const SUGGESTIONS = [
   'Run custom momentum strategy on TCS'
 ];
 
+const sanitizeSourceRef = (src: SourceRef): SourceRef => {
+  let domain = src.domain || 'tradingview.com';
+  if (domain.includes('scanner.tradingview.com')) domain = 'tradingview.com';
+  let favicon = src.favicon;
+  if (!favicon || favicon.includes('scanner.tradingview.com') || favicon.includes('gstatic.com') || favicon.includes('domain=javascript')) {
+    favicon = 'https://icons.duckduckgo.com/ip3/tradingview.com.ico';
+  }
+  return { ...src, domain, favicon };
+};
+
 export const AgentChat: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
@@ -41,7 +52,10 @@ export const AgentChat: React.FC = () => {
   const [pendingTools, setPendingTools] = useState<ToolActivity[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [effort, setEffort] = useState<'default' | 'medium' | 'high'>('default');
+  const [modelId, setModelId] = useState<string>(NEMOTRON_MODELS[0].id);
   const [showEffortMenu, setShowEffortMenu] = useState(false);
+  const [showModelMenu, setShowModelMenu] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const [showSourcesPanel, setShowSourcesPanel] = useState(false);
   const [allSources, setAllSources] = useState<SourceRef[]>([]);
   const [sourceMap, setSourceMap] = useState<Map<string, SourceRef>>(new Map());
@@ -60,6 +74,7 @@ export const AgentChat: React.FC = () => {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) setShowModelMenu(false);
       if (effortMenuRef.current && !effortMenuRef.current.contains(e.target as Node)) setShowEffortMenu(false);
       if (sourcesPanelRef.current && !sourcesPanelRef.current.contains(e.target as Node)) setShowSourcesPanel(false);
     };
@@ -71,12 +86,21 @@ export const AgentChat: React.FC = () => {
     if (!isAuthenticated || !user) return;
     loadAgentMemory(user.uid).then(mem => {
       if (mem?.chatHistory?.length) {
-        setMessages(mem.chatHistory.slice(-20));
+        const sanitizedHistory = mem.chatHistory.map(m => ({
+          ...m,
+          sources: m.sources?.map(sanitizeSourceRef),
+          toolActivity: m.toolActivity?.map(t => ({
+            ...t,
+            sources: t.sources?.map(sanitizeSourceRef)
+          }))
+        }));
+        setMessages(sanitizedHistory.slice(-20));
         const srcs: SourceRef[] = [];
-        mem.chatHistory.forEach(m => m.sources?.forEach(s => srcs.push(s)));
+        sanitizedHistory.forEach(m => m.sources?.forEach(s => srcs.push(s)));
         const uniq = Array.from(new Map(srcs.map(s => [`${s.type}:${s.domain}`, s])).values());
         setAllSources(uniq);
         uniq.forEach(s => setSourceMap(prev => new Map(prev).set(`${s.type}:${s.domain}`, s)));
+        saveAgentMemory({ ...mem, chatHistory: sanitizedHistory });
       }
       if (mem?.preferences?.defaultEffort) setEffort(mem.preferences.defaultEffort);
     });
@@ -85,6 +109,9 @@ export const AgentChat: React.FC = () => {
   const handleSend = useCallback(async (text?: string) => {
     const userText = (text || input).trim();
     if (!userText || isThinking || !user) return;
+
+    setShowModelMenu(false);
+    setShowEffortMenu(false);
 
     setInput('');
     setPendingTools([]);
@@ -101,6 +128,7 @@ export const AgentChat: React.FC = () => {
         userText,
         user.uid,
         effort,
+
         {
           onToken: (token) => {
             console.log('[Chat] onToken:', token.length);
@@ -108,7 +136,8 @@ export const AgentChat: React.FC = () => {
           },
           onToolActivity: (activity) => {
             console.log('[Chat] onToolActivity:', activity.tool, activity.summary);
-            setPendingTools(prev => [...prev, activity]);
+            const sanitizedActivity = { ...activity, sources: activity.sources?.map(sanitizeSourceRef) };
+            setPendingTools(prev => [...prev, sanitizedActivity]);
           },
           onProgress: (status) => {
             console.log('[Chat] onProgress:', status);
@@ -116,11 +145,16 @@ export const AgentChat: React.FC = () => {
           },
           onComplete: async (result) => {
             console.log('[Chat] onComplete:', result.content.length, 'toolActivity:', result.toolActivity.length);
+            const sanitizedSources = (result.sources || []).map(sanitizeSourceRef);
+            const sanitizedToolActivity = (result.toolActivity || []).map(t => ({
+              ...t,
+              sources: t.sources?.map(sanitizeSourceRef)
+            }));
             const assistantMsg: ChatMessage = {
               role: 'assistant',
               content: result.content,
-              toolActivity: result.toolActivity,
-              sources: result.sources,
+              toolActivity: sanitizedToolActivity,
+              sources: sanitizedSources,
               timestamp: Date.now(),
               effort
             };
@@ -129,10 +163,12 @@ export const AgentChat: React.FC = () => {
             setStreamingContent('');
             setPendingTools([]);
             setAllSources(prev => {
-              const next = new Set([...prev, ...result.sources].map(s => `${s.type}:${s.domain}`));
-              return [...prev, ...result.sources].filter(s => next.has(`${s.type}:${s.domain}`) && next.delete(`${s.type}:${s.domain}`));
+              const next = new Set([...prev, ...sanitizedSources].map(s => `${s.type}:${s.domain}`));
+              return [...prev, ...sanitizedSources].filter(s => next.has(`${s.type}:${s.domain}`) && next.delete(`${s.type}:${s.domain}`));
             });
-            setSourceMap(result.sourceMap);
+            const cleanMap = new Map<string, SourceRef>();
+            result.sourceMap?.forEach((val, key) => cleanMap.set(key, sanitizeSourceRef(val)));
+            setSourceMap(cleanMap);
           },
           onError: async (error) => {
             console.error('[Chat] onError:', error);
@@ -142,7 +178,8 @@ export const AgentChat: React.FC = () => {
             setStreamingContent('');
             setPendingTools([]);
           }
-        }
+        },
+        modelId
       );
     } catch (e: any) {
       console.error('[Chat] handleSend error:', e);
@@ -154,7 +191,7 @@ export const AgentChat: React.FC = () => {
     } finally {
       setIsThinking(false);
     }
-  }, [input, isThinking, effort, user]);
+  }, [input, isThinking, effort, modelId, user]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -217,6 +254,9 @@ export const AgentChat: React.FC = () => {
     );
   };
 
+  const currentModel = NEMOTRON_MODELS.find(m => m.id === modelId) || NEMOTRON_MODELS[0];
+  const currentEffort = EFFORT_LEVELS.find(e => e.value === effort) || EFFORT_LEVELS[0];
+
   return (
     <>
       <button
@@ -235,24 +275,65 @@ export const AgentChat: React.FC = () => {
               <div>
                 <h3>SentimentAI Agent</h3>
                 <span className="agent-status">
-                  {isThinking ? progress || 'Working...' : `Nemotron 3 Ultra • ${EFFORT_LEVELS.find(e => e.value === effort)?.label} Effort`}
+                  {isThinking ? progress || 'Working...' : `${currentModel.shortLabel || currentModel.label} • ${currentEffort.label} Effort`}
                 </span>
               </div>
             </div>
             <div className="flex items-center gap-1">
+              <div className="relative" ref={modelMenuRef}>
+                <button
+                  type="button"
+                  className={`agent-header-pill ${showModelMenu ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowModelMenu(prev => !prev);
+                    setShowEffortMenu(false);
+                  }}
+                  aria-label="Model selection"
+                  title={currentModel.label}
+                >
+                  <Cpu className="w-3.5 h-3.5 text-[#C4A77D] shrink-0" />
+                  <span className="agent-pill-label">{currentModel.shortLabel || currentModel.label}</span>
+                  <ChevronDown className={`w-3 h-3 text-white/50 transition-transform duration-200 ${showModelMenu ? 'rotate-180' : ''}`} />
+                </button>
+                {showModelMenu && (
+                  <div className="agent-menu-dropdown model-dropdown">
+                    <div className="agent-menu-header">AI Engine</div>
+                    {NEMOTRON_MODELS.map(m => (
+                      <button key={m.id} className={`effort-option ${modelId === m.id ? 'active' : ''}`} onClick={() => { setModelId(m.id); setShowModelMenu(false); }}>
+                        <Cpu className="w-4 h-4 text-[#C4A77D] shrink-0" />
+                        <div>
+                          <span className="effort-opt-label">{m.label}</span>
+                          <span className="effort-opt-desc">{m.desc}</span>
+                        </div>
+                        {modelId === m.id && <CheckCircle2 className="w-4 h-4 text-[#C4A77D]" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="relative" ref={effortMenuRef}>
-                <button className="agent-header-btn effort-btn" onClick={() => setShowEffortMenu(!showEffortMenu)} aria-label="Effort level">
-                  <span className="effort-badge">{EFFORT_LEVELS.find(e => e.value === effort)?.icon}</span>
-                  <span className="effort-label">{EFFORT_LEVELS.find(e => e.value === effort)?.label}</span>
-                  <ChevronRight className="w-3 h-3" />
+                <button
+                  type="button"
+                  className={`agent-header-pill ${showEffortMenu ? 'active' : ''}`}
+                  onClick={() => {
+                    setShowEffortMenu(prev => !prev);
+                    setShowModelMenu(false);
+                  }}
+                  aria-label="Effort level"
+                  title={`${currentEffort.label} Effort`}
+                >
+                  <span className="shrink-0">{currentEffort.icon}</span>
+                  <span className="agent-pill-label">{currentEffort.label}</span>
+                  <ChevronDown className={`w-3 h-3 text-white/50 transition-transform duration-200 ${showEffortMenu ? 'rotate-180' : ''}`} />
                 </button>
                 {showEffortMenu && (
-                  <div className="effort-dropdown">
+                  <div className="agent-menu-dropdown effort-dropdown">
+                    <div className="agent-menu-header">Reasoning Depth</div>
                     {EFFORT_LEVELS.map(e => (
                       <button key={e.value} className={`effort-option ${effort === e.value ? 'active' : ''}`} onClick={() => { setEffort(e.value); setShowEffortMenu(false); }}>
                         <span>{e.icon}</span>
                         <div>
-                          <span className="effort-opt-label">{e.label}</span>
+                          <span className="effort-opt-label">{e.label} Effort</span>
                           <span className="effort-opt-desc">{e.desc}</span>
                         </div>
                         {effort === e.value && <CheckCircle2 className="w-4 h-4 text-[#C4A77D]" />}

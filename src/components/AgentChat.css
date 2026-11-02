@@ -69,10 +69,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
-  background: rgba(196, 167, 125, 0.06);
-  border-bottom: 1px solid rgba(196, 167, 125, 0.12);
+  padding: 12px 14px;
+  background: rgba(20, 20, 20, 0.95);
+  border-bottom: 1px solid rgba(196, 167, 125, 0.16);
   flex-shrink: 0;
+  gap: 8px;
+  position: relative;
+  z-index: 50;
 }
 
 .agent-panel-title {
@@ -108,7 +111,46 @@
   letter-spacing: 0.1em;
 }
 
-/* ─── EFFORT SELECTOR ─── */
+/* ─── HEADER PILLS & DROPDOWNS ─── */
+
+.agent-header-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  white-space: nowrap;
+  max-width: 125px;
+}
+
+.agent-header-pill:hover {
+  background: rgba(196, 167, 125, 0.12);
+  border-color: rgba(196, 167, 125, 0.35);
+  color: #fff;
+}
+
+.agent-header-pill.active {
+  background: rgba(196, 167, 125, 0.2);
+  border-color: #C4A77D;
+  color: #C4A77D;
+  box-shadow: 0 0 10px rgba(196, 167, 125, 0.2);
+}
+
+.agent-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
 
 .effort-btn {
   display: flex;
@@ -131,6 +173,29 @@
 
 .effort-badge { display: flex; }
 
+.agent-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 250px;
+  max-width: calc(100vw - 36px);
+  background: #141414;
+  border: 1px solid rgba(196, 167, 125, 0.3);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  z-index: 1000;
+  animation: dropdownIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.agent-menu-dropdown.model-dropdown {
+  right: -50px;
+}
+
+.agent-menu-dropdown.effort-dropdown {
+  right: 0;
+}
+
 .effort-dropdown {
   position: absolute;
   top: calc(100% + 6px);
@@ -141,8 +206,19 @@
   padding: 6px;
   min-width: 200px;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-  z-index: 100;
+  z-index: 1000;
   animation: dropdownIn 0.15s ease-out;
+}
+
+.agent-menu-header {
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(196, 167, 125, 0.75);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 4px;
 }
 
 @keyframes dropdownIn {
@@ -174,9 +250,10 @@
 .effort-opt-desc { font-size: 10px; color: rgba(255, 255, 255, 0.45); display: block; margin-top: 2px; }
 
 .agent-header-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  flex-shrink: 0;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.6);

@@ -16,11 +16,20 @@ export interface ToolDefinition {
   };
 }
 
+export interface UIAction {
+  type: 'table' | 'chart' | 'metric_cards' | 'comparison' | 'timeline' | 'html';
+  id: string;
+  title: string;
+  data: any;
+  config?: Record<string, any>;
+}
+
 export interface ToolResult {
   success: boolean;
   data: any;
   summary: string;
   sources?: SourceRef[];
+  uiActions?: UIAction[];
 }
 
 export interface SourceRef {
@@ -47,11 +56,51 @@ const extractDomain = (url: string): string => {
   try { return new URL(url).hostname.replace('www.', ''); } catch { return 'unknown'; }
 };
 
-const getFavicon = (domain: string): string => `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+export const normalizeApexDomain = (rawDomain: string): string => {
+  if (!rawDomain) return '';
+  const clean = rawDomain.toLowerCase().replace(/^https?:\/\//, '').split('/')[0].split(':')[0].replace(/^www\./, '');
+  if (clean.includes('tradingview.com')) return 'tradingview.com';
+  if (clean.includes('yahoo.com')) return 'yahoo.com';
+  if (clean.includes('marketstack.com')) return 'marketstack.com';
+  if (clean.includes('mediastack.com')) return 'mediastack.com';
+  if (clean.includes('indianapi.in')) return 'indianapi.in';
+  if (clean.includes('mfapi.in')) return 'mfapi.in';
+  if (clean.includes('jina.ai')) return 'jina.ai';
+  if (clean.includes('duckduckgo.com')) return 'duckduckgo.com';
+  if (clean.includes('brave.com')) return 'brave.com';
+  if (clean.includes('tavily.com')) return 'tavily.com';
+  if (clean.includes('alphavantage.co')) return 'alphavantage.co';
+  if (clean.includes('financialmodelingprep.com')) return 'financialmodelingprep.com';
 
-const toSourceRef = (domain: string, name: string, url?: string, type: SourceRef['type'] = 'api'): SourceRef => ({
-  type, name, domain, url, favicon: getFavicon(domain)
-});
+  const parts = clean.split('.');
+  if (parts.length > 2) {
+    const lastTwo = parts.slice(-2).join('.');
+    if (['co.uk', 'com.au', 'co.in', 'net.in', 'org.in', 'gov.in'].includes(lastTwo) && parts.length > 3) {
+      return parts.slice(-3).join('.');
+    }
+    return parts.slice(-2).join('.');
+  }
+  return clean;
+};
+
+export const getFavicon = (domain: string): string => {
+  const apex = normalizeApexDomain(domain);
+  if (!apex || apex === 'unknown' || apex === 'browser') {
+    return 'https://icons.duckduckgo.com/ip3/duckduckgo.com.ico';
+  }
+  return `https://icons.duckduckgo.com/ip3/${encodeURIComponent(apex)}.ico`;
+};
+
+const toSourceRef = (domain: string, name: string, url?: string, type: SourceRef['type'] = 'api'): SourceRef => {
+  const cleanDomain = normalizeApexDomain(domain) || domain;
+  return {
+    type,
+    name,
+    domain: cleanDomain,
+    url: url || (cleanDomain !== 'browser' ? `https://${cleanDomain}` : undefined),
+    favicon: getFavicon(cleanDomain)
+  };
+};
 
 // ─── TOOL 1: RUN FULL STOCK ANALYSIS ───
 
@@ -114,12 +163,12 @@ export const runStockAnalysis = async (ticker: string, companyName?: string): Pr
     };
 
     const sources: SourceRef[] = [
-      toSourceRef('query1.finance.yahoo.com', 'Yahoo Finance', undefined, 'api'),
-      toSourceRef('scanner.tradingview.com', 'TradingView Scanner', undefined, 'api'),
-      toSourceRef('api.marketstack.com', 'MarketStack', undefined, 'api'),
-      toSourceRef('gnews.io', 'GNews', undefined, 'api'),
-      toSourceRef('api.mediastack.com', 'MediaStack', undefined, 'api'),
-      toSourceRef('stock.indianapi.in', 'IndianAPI', undefined, 'api')
+      toSourceRef('finance.yahoo.com', 'Yahoo Finance', 'https://finance.yahoo.com', 'api'),
+      toSourceRef('tradingview.com', 'TradingView Scanner', 'https://www.tradingview.com', 'api'),
+      toSourceRef('marketstack.com', 'MarketStack', 'https://marketstack.com', 'api'),
+      toSourceRef('gnews.io', 'GNews', 'https://gnews.io', 'api'),
+      toSourceRef('mediastack.com', 'MediaStack', 'https://mediastack.com', 'api'),
+      toSourceRef('indianapi.in', 'IndianAPI', 'https://indianapi.in', 'api')
     ];
 
     const verdictHint =
@@ -137,11 +186,12 @@ export const runStockAnalysis = async (ticker: string, companyName?: string): Pr
   }
 };
 
-// ─── TOOL 2: WEB SEARCH (Tavily if key, else DuckDuckGo) ───
+// ─── TOOL 2: WEB SEARCH (Tavily if key, else DuckDuckGo, else Brave Search API) ───
 
 export const webSearch = async (query: string, maxResults: number = 8): Promise<ToolResult> => {
   const sources: SourceRef[] = [];
 
+  // Try Tavily first if key available
   if (API_CONFIG.TAVILY_API_KEY) {
     try {
       const res = await fetchT('/api/tavily/search', {
@@ -160,10 +210,35 @@ export const webSearch = async (query: string, maxResults: number = 8): Promise<
     } catch {}
   }
 
-  // Fallback: DuckDuckGo
+  // Try Brave Search API if key available
+  if (API_CONFIG.BRAVE_API_KEY) {
+    try {
+      const res = await fetchT('/api/brave/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: query, count: maxResults, search_lang: 'en' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const results = (data.web?.results || []).map((r: any) => ({
+          title: r.title, url: r.url, snippet: r.description?.substring(0, 300) || ''
+        }));
+        sources.push(toSourceRef('brave.com', 'Brave Search', undefined, 'web'));
+        return { success: true, data: results, summary: `Brave: ${results.length} results for "${query}"`, sources };
+      }
+    } catch {}
+  }
+
+  // Fallback: DuckDuckGo via proxy with better headers
   try {
     const url = `/api/ddg/html/?q=${encodeURIComponent(query)}`;
-    const res = await fetchT(url, { headers: { 'Accept': 'text/html' } });
+    const res = await fetchT(url, { 
+      headers: { 
+        'Accept': 'text/html',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      } 
+    });
     if (!res.ok) throw new Error(`Search failed (${res.status})`);
     const html = await res.text();
 
@@ -192,7 +267,13 @@ export const webSearch = async (query: string, maxResults: number = 8): Promise<
     sources.push(toSourceRef('duckduckgo.com', 'DuckDuckGo', undefined, 'web'));
     return { success: true, data: results, summary: `DDG: ${results.length} results for "${query}"`, sources };
   } catch (e: any) {
-    return { success: false, data: [], summary: `Web search failed: ${e.message}`, sources };
+    // Final fallback: return a mock result with a helpful message
+    return { 
+      success: false, 
+      data: [], 
+      summary: `Web search unavailable (Tavily/DDG blocked). Please configure TAVILY_API_KEY or BRAVE_API_KEY in .env for web search. Error: ${e.message}`, 
+      sources 
+    };
   }
 };
 
@@ -259,7 +340,7 @@ export const getFNOChain = async (ticker: string): Promise<ToolResult> => {
         calls, puts
       },
       summary: `F&O chain for ${normalized}: spot ${quote?.regularMarketPrice}, ${calls.length} calls / ${puts.length} puts for nearest expiry.`,
-      sources: [toSourceRef('query1.finance.yahoo.com', 'Yahoo Finance Options', undefined, 'api')]
+      sources: [toSourceRef('finance.yahoo.com', 'Yahoo Finance Options', 'https://finance.yahoo.com', 'api')]
     };
   } catch (e: any) {
     return { success: false, data: null, summary: `F&O fetch failed for ${ticker}: ${e.message}`, sources: [] };
@@ -313,7 +394,7 @@ export const getMutualFund = async (fundName: string): Promise<ToolResult> => {
       success: true,
       data: funds,
       summary: `Found ${funds.length} mutual funds for "${fundName}". Top: ${funds[0]?.schemeName} — NAV ${funds[0]?.latestNAV}, 1Y return ${funds[0]?.oneYearReturnPercent ?? 'N/A'}%`,
-      sources: [toSourceRef('api.mfapi.in', 'MF API India', undefined, 'api')]
+      sources: [toSourceRef('mfapi.in', 'MF API India', 'https://www.mfapi.in', 'api')]
     };
   } catch (e: any) {
     return { success: false, data: null, summary: `Mutual fund fetch failed for "${fundName}": ${e.message}`, sources: [] };
@@ -344,7 +425,7 @@ export const getGlobalQuote = async (symbol: string): Promise<ToolResult> => {
         changePercent: parseFloat((((current - prev) / prev) * 100).toFixed(2)),
         currency: meta.currency, fiveDayHistory: closes.slice(-5).map((p: number) => parseFloat(p.toFixed(2))) },
       summary: `${meta.shortName || symbol}: ${current} ${meta.currency} (${(((current - prev) / prev) * 100).toFixed(2)}% today)`,
-      sources: [toSourceRef('query1.finance.yahoo.com', 'Yahoo Finance', undefined, 'api')]
+      sources: [toSourceRef('finance.yahoo.com', 'Yahoo Finance', 'https://finance.yahoo.com', 'api')]
     };
   } catch (e: any) {
     return { success: false, data: null, summary: `Quote failed for ${symbol}: ${e.message}`, sources: [] };
@@ -386,30 +467,207 @@ export const getFMP = async (endpoint: string, params: Record<string, string> = 
   }
 };
 
-// ─── TOOL 9: CODE EXECUTION (sandboxed via Cloud Function) ───
+// ─── TOOL 9: CODE EXECUTION (Pyodide in-browser) ───
 
-export const executeCode = async (code: string, language: 'python' | 'javascript' = 'python', timeoutMs: number = 30000): Promise<ToolResult> => {
-  try {
-    const res = await fetchT('/api/codex/execute', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, language, timeoutMs })
-    }, timeoutMs + 5000);
+let pyodideReady: Promise<any> | null = null;
 
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Code execution failed (${res.status}): ${err}`);
-    }
-    const result = await res.json();
-    return {
-      success: true,
-      data: { stdout: result.stdout, stderr: result.stderr, exitCode: result.exitCode, executionTimeMs: result.executionTimeMs },
-      summary: `Code executed (${language}): ${result.exitCode === 0 ? 'success' : 'error'} in ${result.executionTimeMs}ms`,
-      sources: [toSourceRef('codex', 'Code Executor', undefined, 'code')]
+const ensurePyodide = async () => {
+  if (pyodideReady) return pyodideReady;
+
+  pyodideReady = new Promise((resolve, _reject) => {
+    const checkPyodide = () => {
+      const lp = (window as any).loadPyodide;
+      if (lp) {
+        resolve(lp({
+          indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.2/full/",
+          stdout: (text: string) => { console.log('[Pyodide stdout]', text); },
+          stderr: (text: string) => { console.warn('[Pyodide stderr]', text); }
+        }));
+      } else {
+        setTimeout(checkPyodide, 100);
+      }
     };
-  } catch (e: any) {
-    return { success: false, data: null, summary: `Code execution failed: ${e.message}`, sources: [] };
+    checkPyodide();
+  });
+
+  return pyodideReady;
+};
+
+export const executeCode = async (code: string, language: 'python' | 'javascript' = 'python', _timeoutMs: number = 30000): Promise<ToolResult> => {
+  const startTime = Date.now();
+  const uiActions: UIAction[] = [];
+
+  if (language === 'python') {
+    try {
+      const pyodide = await ensurePyodide();
+      
+      let stdout = '', stderr = '';
+      const captureStdout = (text: string) => { stdout += text; };
+      const captureStderr = (text: string) => { stderr += text; };
+      
+      pyodide.setStdout({ batched: captureStdout });
+      pyodide.setStderr({ batched: captureStderr });
+
+      // Inject UI action helpers into Python namespace
+      pyodide.runPython(`
+import json, sys, pandas as pd, numpy as np
+from datetime import datetime, timedelta
+
+def ui_table(title, data, columns=None, sortable=True, filterable=True, pageSize=10):
+    """Create a sortable, filterable table UI action."""
+    if isinstance(data, list) and data and isinstance(data[0], dict):
+        cols = columns or list(data[0].keys())
+        rows = [[row.get(c, '') for c in cols] for row in data]
+    else:
+        cols = columns or [f'col_{i}' for i in range(len(data[0]) if data else 0)]
+        rows = data
+    return {
+      "type": "table", "id": f"table_{int(datetime.now().timestamp()*1000)}",
+      "title": title, "data": {"columns": cols, "rows": rows},
+      "config": {"sortable": sortable, "filterable": filterable, "pageSize": pageSize}
+    }
+
+def ui_chart(title, data, chart_type='line', x_key=None, y_keys=None, color_key=None, height=300):
+    """Create a Chart.js compatible chart UI action."""
+    return {
+      "type": "chart", "id": f"chart_{int(datetime.now().timestamp()*1000)}",
+      "title": title, "data": data,
+      "config": {"chartType": chart_type, "xKey": x_key, "yKeys": y_keys, "colorKey": color_key, "height": height}
+    }
+
+def ui_metric_cards(title, metrics):
+    """Create KPI metric cards grid."""
+    return {
+      "type": "metric_cards", "id": f"metrics_{int(datetime.now().timestamp()*1000)}",
+      "title": title, "data": metrics
+    }
+
+def ui_comparison(title, items, keys):
+    """Side-by-side comparison table."""
+    return {
+      "type": "comparison", "id": f"comp_{int(datetime.now().timestamp()*1000)}",
+      "title": title, "data": {"items": items, "keys": keys}
+    }
+
+def ui_timeline(title, events):
+    """Timeline of events."""
+    return {
+      "type": "timeline", "id": f"timeline_{int(datetime.now().timestamp()*1000)}",
+      "title": title, "data": {"events": events}
+    }
+
+def ui_html(title, html):
+    """Raw HTML (sanitized)."""
+    return {
+      "type": "html", "id": f"html_{int(datetime.now().timestamp()*1000)}",
+      "title": title, "data": {"html": html}
+    }
+
+def emit_ui(action):
+    """Add UI action to output."""
+    import sys
+    sys.ui_actions = getattr(sys, 'ui_actions', [])
+    sys.ui_actions.append(action)
+
+# Make helpers available
+sys.ui_table = ui_table
+sys.ui_chart = ui_chart
+sys.ui_metric_cards = ui_metric_cards
+sys.ui_comparison = ui_comparison
+sys.ui_timeline = ui_timeline
+sys.ui_html = ui_html
+sys.emit_ui = emit_ui
+      `);
+
+      await pyodide.runPythonAsync(code);
+
+      // Extract UI actions from Python namespace
+      const pyActions = pyodide.runPython(`
+import sys, json
+actions = getattr(sys, 'ui_actions', [])
+print(json.dumps(actions))
+      `);
+      
+      try {
+        const parsed = JSON.parse(pyActions);
+        if (Array.isArray(parsed)) uiActions.push(...parsed);
+      } catch {}
+
+      return {
+        success: true,
+        data: { stdout, stderr, exitCode: 0, executionTimeMs: Date.now() - startTime },
+        summary: `Python executed in-browser (Pyodide) in ${Date.now() - startTime}ms`,
+        sources: [{ type: 'code', name: 'Pyodide', domain: 'pyodide.org', favicon: 'https://pyodide.org/favicon.ico' }],
+        uiActions
+      };
+    } catch (e: any) {
+      return { success: false, data: null, summary: `Pyodide error: ${e.message}`, sources: [] };
+    }
   }
+
+  // JavaScript execution (for UI manipulation, Chart.js, etc.)
+  if (language === 'javascript') {
+    try {
+      let stdout = '', stderr = '';
+      const originalLog = console.log;
+      const originalError = console.error;
+      console.log = (...args) => { stdout += args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n'; };
+      console.error = (...args) => { stderr += args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ') + '\n'; };
+
+      // Provide UI helpers in JS
+      const uiHelpers = {
+        uiTable: (title: string, data: any[], columns?: string[]) => ({
+          type: 'table', id: `table_${Date.now()}`, title, data: { columns: columns || (data[0] ? Object.keys(data[0]) : []), rows: data.map(r => columns ? columns.map(c => r[c]) : Object.values(r)) },
+          config: { sortable: true, filterable: true, pageSize: 10 }
+        }),
+        uiChart: (title: string, data: any, chartType: string = 'line', xKey?: string, yKeys?: string[], height = 300) => ({
+          type: 'chart', id: `chart_${Date.now()}`, title, data, config: { chartType, xKey, yKeys, height }
+        }),
+        uiMetricCards: (title: string, metrics: any[]) => ({
+          type: 'metric_cards', id: `metrics_${Date.now()}`, title, data: metrics
+        }),
+        uiComparison: (title: string, items: any[], keys: string[]) => ({
+          type: 'comparison', id: `comp_${Date.now()}`, title, data: { items, keys }
+        }),
+        uiTimeline: (title: string, events: any[]) => ({
+          type: 'timeline', id: `timeline_${Date.now()}`, title, data: { events }
+        }),
+        uiHTML: (title: string, html: string) => ({
+          type: 'html', id: `html_${Date.now()}`, title, data: { html }
+        })
+      };
+
+      // Make helpers globally available
+      (window as any).uiTable = uiHelpers.uiTable;
+      (window as any).uiChart = uiHelpers.uiChart;
+      (window as any).uiMetricCards = uiHelpers.uiMetricCards;
+      (window as any).uiComparison = uiHelpers.uiComparison;
+      (window as any).uiTimeline = uiHelpers.uiTimeline;
+      (window as any).uiHTML = uiHelpers.uiHTML;
+
+      const result = await eval(`(async () => { ${code} })()`);
+      
+      // Check for UI actions returned
+      if (result && result.type && ['table', 'chart', 'metric_cards', 'comparison', 'timeline', 'html'].includes(result.type)) {
+        uiActions.push(result);
+      }
+
+      console.log = originalLog;
+      console.error = originalError;
+
+      return {
+        success: true,
+        data: { stdout, stderr, exitCode: 0, executionTimeMs: Date.now() - startTime, result },
+        summary: `JavaScript executed in-browser in ${Date.now() - startTime}ms`,
+        sources: [{ type: 'code', name: 'Browser JS', domain: 'browser', favicon: 'https://icons.duckduckgo.com/ip3/duckduckgo.com.ico' }],
+        uiActions
+      };
+    } catch (e: any) {
+      return { success: false, data: null, summary: `JS error: ${e.message}`, sources: [] };
+    }
+  }
+
+  return { success: false, data: null, summary: `Unsupported language: ${language}`, sources: [] };
 };
 
 // ─── TOOL DEFINITIONS ───
