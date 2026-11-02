@@ -1,7 +1,5 @@
 import { API_CONFIG, NEMOTRON_MODEL } from '../apiConfig';
 import { TOOL_DEFINITIONS, TOOL_EXECUTORS, type ToolResult, type SourceRef } from './agentTools';
-import { db } from '../firebase';
-import { doc, setDoc, getDoc, collection, query, orderBy, limit, serverTimestamp, getDocs as fsGetDocs } from 'firebase/firestore';
 
 export type { SourceRef };
 
@@ -19,6 +17,7 @@ export interface ToolActivity {
   args: Record<string, any>;
   summary: string;
   success: boolean;
+  data?: any;
   sources?: SourceRef[];
 }
 
@@ -43,9 +42,8 @@ export interface StreamCallbacks {
   onError: (error: Error) => void;
 }
 
-const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
 const MAX_ITERATIONS = 10;
-const LLM_TIMEOUT = 120000;
+const LLM_TIMEOUT = 300000; // 5 minutes for NVIDIA Nemotron 3 Ultra
 
 const EFFORT_SYSTEM_PROMPTS = {
   default: `You are SentimentAI Agent — an elite financial intelligence assistant with FULL AUTONOMOUS control over a market analysis webapp and unrestricted internet access. You operate for Indian equity market users (NSE/BSE focus) but can access global markets too.
@@ -125,34 +123,26 @@ const fetchWithTimeout = async (url: string, options: RequestInit, timeout: numb
 const callLLMStream = async (
   messages: any[],
   useTools: boolean,
-  provider: 'nvidia' | 'openrouter',
   callbacks: StreamCallbacks
 ): Promise<{ content: string; toolCalls: any[] }> => {
-  const model = provider === 'nvidia' ? NEMOTRON_MODEL : OPENROUTER_MODEL;
-  const url = provider === 'nvidia' ? '/llm/nvidia' : '/llm/openrouter/chat/completions';
+  const url = '/llm/nvidia';
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (provider === 'nvidia') {
-    headers['Authorization'] = `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`;
-  } else {
-    headers['Authorization'] = `Bearer ${API_CONFIG.OPENROUTER_KEY}`;
-    headers['HTTP-Referer'] = window.location.origin;
-    headers['X-Title'] = 'SentimentAI Agent';
-  }
+  headers['Authorization'] = `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`;
 
-  const body: any = { model, messages, temperature: 0.2, max_tokens: 8192, stream: true };
+  const body: any = { model: NEMOTRON_MODEL, messages, temperature: 0.2, max_tokens: 8192, stream: true };
   if (useTools) { body.tools = TOOL_DEFINITIONS; body.tool_choice = 'auto'; }
 
-  console.log(`[Agent] Calling ${provider} streaming...`, { model, url, hasTools: useTools });
+  console.log(`[Agent] Calling NVIDIA Nemotron 3 Ultra streaming...`, { model: NEMOTRON_MODEL, url, hasTools: useTools });
 
   const res = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`[Agent] ${provider} LLM failed (${res.status}):`, errText);
-    throw new Error(`${provider} LLM failed (${res.status}): ${errText}`);
+    console.error(`[Agent] NVIDIA LLM failed (${res.status}):`, errText);
+    throw new Error(`NVIDIA LLM failed (${res.status}): ${errText}`);
   }
 
-  console.log(`[Agent] ${provider} streaming response OK`);
+  console.log(`[Agent] NVIDIA streaming response OK`);
 
   let fullContent = '';
   let toolCalls: any[] = [];
@@ -203,39 +193,42 @@ const callLLMStream = async (
     }
   }
 
-  console.log(`[Agent] Streaming complete: ${chunkCount} chunks, content length: ${fullContent.length}, toolCalls: ${toolCalls.length}`);
+  console.log(`[Agent] NVIDIA streaming complete: ${chunkCount} chunks, content length: ${fullContent.length}, toolCalls: ${toolCalls.length}`);
 
   if (currentToolCall) toolCalls.push(currentToolCall);
   return { content: fullContent, toolCalls };
 };
 
-const callLLMNonStream = async (messages: any[], useTools: boolean, provider: 'nvidia' | 'openrouter'): Promise<any> => {
-  const model = provider === 'nvidia' ? NEMOTRON_MODEL : OPENROUTER_MODEL;
-  const url = provider === 'nvidia' ? '/llm/nvidia' : '/llm/openrouter/chat/completions';
+const callLLMNonStream = async (messages: any[], useTools: boolean): Promise<any> => {
+  const url = '/llm/nvidia';
 
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (provider === 'nvidia') headers['Authorization'] = `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`;
-  else { headers['Authorization'] = `Bearer ${API_CONFIG.OPENROUTER_KEY}`; headers['HTTP-Referer'] = window.location.origin; headers['X-Title'] = 'SentimentAI Agent'; }
+  headers['Authorization'] = `Bearer ${API_CONFIG.NVIDIA_NIM_KEY}`;
 
-  const body: any = { model, messages, temperature: 0.2, max_tokens: 8192 };
+  const body: any = { model: NEMOTRON_MODEL, messages, temperature: 0.2, max_tokens: 8192 };
   if (useTools) { body.tools = TOOL_DEFINITIONS; body.tool_choice = 'auto'; }
 
+  console.log(`[Agent] Calling NVIDIA Nemotron 3 Ultra (non-streaming)...`);
+
   const res = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`${provider} LLM failed (${res.status})`);
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[Agent] NVIDIA LLM failed (${res.status}):`, errText);
+    throw new Error(`NVIDIA LLM failed (${res.status}): ${errText}`);
+  }
+
   const data = await res.json();
   return data.choices[0].message;
 };
 
-// ─── MEMORY MANAGEMENT ───
+// ─── LOCAL STORAGE MEMORY (no Firestore) ───
+
+const MEMORY_KEY = (userId: string) => `agent_memory_${userId}`;
+const CHAT_KEY = (userId: string) => `agent_chat_${userId}`;
 
 export const loadAgentMemory = async (userId: string): Promise<AgentMemory | null> => {
   try {
-    const docRef = doc(db, 'agent_memory', userId);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) return snap.data() as AgentMemory;
-  } catch {}
-  try {
-    const local = localStorage.getItem(`agent_memory_${userId}`);
+    const local = localStorage.getItem(MEMORY_KEY(userId));
     if (local) return JSON.parse(local);
   } catch {}
   return null;
@@ -243,46 +236,123 @@ export const loadAgentMemory = async (userId: string): Promise<AgentMemory | nul
 
 export const saveAgentMemory = async (memory: AgentMemory): Promise<void> => {
   try {
-    localStorage.setItem(`agent_memory_${memory.userId}`, JSON.stringify(memory));
-  } catch {}
-  try {
-    const docRef = doc(db, 'agent_memory', memory.userId);
-    await setDoc(docRef, { ...memory, updatedAt: serverTimestamp() }, { merge: true });
-  } catch {}
+    localStorage.setItem(MEMORY_KEY(memory.userId), JSON.stringify(memory));
+  } catch (e) {
+    console.warn('[Agent] Memory save failed:', e);
+  }
 };
 
 export const appendToChatHistory = async (userId: string, message: ChatMessage): Promise<void> => {
   try {
-    const key = `agent_chat_${userId}`;
+    const key = CHAT_KEY(userId);
     const existing = JSON.parse(localStorage.getItem(key) || '[]');
     existing.push(message);
     if (existing.length > 50) existing.splice(0, existing.length - 50);
     localStorage.setItem(key, JSON.stringify(existing));
-  } catch {}
-  try {
-    const historyRef = collection(db, 'agent_memory', userId, 'chat_history');
-    await setDoc(doc(historyRef), { ...message, timestamp: serverTimestamp() });
-  } catch {}
-};
-
-export const loadRecentChatHistory = async (userId: string, limitCount: number = 20): Promise<ChatMessage[]> => {
-  try {
-    const historyRef = collection(db, 'agent_memory', userId, 'chat_history');
-    const q = query(historyRef, orderBy('timestamp', 'desc'), limit(limitCount));
-    const snap = await fsGetDocs(q);
-    return snap.docs.map(d => d.data() as ChatMessage).reverse();
-  } catch {
-    try {
-      const key = `agent_chat_${userId}`;
-      const local = JSON.parse(localStorage.getItem(key) || '[]');
-      return local.slice(-limitCount);
-    } catch {
-      return [];
-    }
+  } catch (e) {
+    console.warn('[Agent] Chat history append failed:', e);
   }
 };
 
-// ─── MAIN AGENT LOOP WITH FALLBACK ───
+export const loadRecentChatHistory = async (userId: string, limitCount: number = 15): Promise<ChatMessage[]> => {
+  try {
+    const key = CHAT_KEY(userId);
+    const local = JSON.parse(localStorage.getItem(key) || '[]');
+    return local.slice(-limitCount);
+  } catch {
+    return [];
+  }
+};
+
+// ─── LOCAL SYNTHESIS FALLBACK ───
+
+const synthesizeFromTools = (_userMessage: string, toolActivity: ToolActivity[]): string => {
+  const analysis = toolActivity.find(t => t.tool === 'run_stock_analysis' && t.success);
+  const search = toolActivity.find(t => t.tool === 'web_search' && t.success);
+  const fno = toolActivity.find(t => t.tool === 'get_fno_chain' && t.success);
+  const mf = toolActivity.find(t => t.tool === 'get_mutual_fund' && t.success);
+
+  let response = '';
+
+  if (analysis) {
+    const d = analysis.data;
+    const tech = d?.technical;
+    const sent = d?.sentiment;
+    const regime = d?.marketRegime;
+
+    response += `## Analysis for ${d?.company || 'Stock'} (${d?.ticker || 'N/A'})\n\n`;
+    response += `**Price:** ${d?.price} ${d?.currency} (${d?.changePercent >= 0 ? '+' : ''}${d?.changePercent}%)\n`;
+    response += `**Regime:** ${regime}\n\n`;
+
+    response += `### Technicals\n`;
+    response += `- RSI: ${tech?.rsi} | StochRSI: ${tech?.stochRSI}\n`;
+    response += `- MACD: ${tech?.macd} / Signal: ${tech?.macdSignal} / Hist: ${tech?.macdHistogram}\n`;
+    response += `- ADX: ${tech?.adx} | Trend: ${tech?.trendDirection}\n`;
+    response += `- Bollinger %B: ${tech?.bollingerPercentB} | ATR: ${tech?.atr}\n`;
+    response += `- SMA20: ${tech?.sma20} | SMA50: ${tech?.sma50}\n`;
+    response += `- 52W Range: ${tech?.fiftyTwoWeekLow} - ${tech?.fiftyTwoWeekHigh}\n\n`;
+
+    response += `### Sentiment\n`;
+    response += `- News Score: ${sent?.newsSentimentScore} (${sent?.positiveArticles} pos / ${sent?.negativeArticles} neg / ${sent?.neutralArticles} neu)\n`;
+    response += `- Fear & Greed: ${sent?.fearGreedIndex} | Social Heat: ${sent?.socialHeat}\n`;
+    response += `- TV Recommend: ${sent?.tradingViewRecommend} | TV RSI: ${sent?.tradingViewRSI} | VWAP: ${sent?.tradingViewVWAP}\n\n`;
+
+    let verdict = 'NEUTRAL';
+    if (tech && sent) {
+      const techScore = tech.technicalScore || 0;
+      const sentScore = sent.newsSentimentScore || 0;
+      if (techScore > 0.1 && sentScore > 0) verdict = 'BULLISH';
+      else if (techScore < -0.1 && sentScore < 0) verdict = 'BEARISH';
+      else if (techScore > 0.15) verdict = 'BULLISH';
+      else if (techScore < -0.15) verdict = 'BEARISH';
+    }
+    response += `### Local Verdict: **${verdict}**\n`;
+    response += `*Based on technical score ${tech?.technicalScore?.toFixed(2)} and news sentiment ${sent?.newsSentimentScore?.toFixed(2)}*\n\n`;
+  }
+
+  if (search) {
+    response += `### Web Search Results\n`;
+    const results = search.data || [];
+    results.slice(0, 3).forEach((r: any, i: number) => {
+      response += `${i + 1}. **${r.title}** — ${r.snippet} [${r.url}]\n`;
+    });
+    response += '\n';
+  }
+
+  if (fno) {
+    response += `### F&O Chain\n`;
+    const d = fno.data;
+    response += `- Spot: ${d?.spotPrice} | Expiry: ${d?.expirationDate}\n`;
+    response += `- Calls: ${d?.calls?.length || 0} | Puts: ${d?.puts?.length || 0}\n`;
+    if (d?.calls?.length) {
+      const topCall = d.calls.sort((a: any, b: any) => (b.openInterest || 0) - (a.openInterest || 0))[0];
+      response += `- Top Call OI: Strike ${topCall.strike} (OI: ${topCall.openInterest})\n`;
+    }
+    if (d?.puts?.length) {
+      const topPut = d.puts.sort((a: any, b: any) => (b.openInterest || 0) - (a.openInterest || 0))[0];
+      response += `- Top Put OI: Strike ${topPut.strike} (OI: ${topPut.openInterest})\n`;
+    }
+    response += '\n';
+  }
+
+  if (mf) {
+    response += `### Mutual Funds\n`;
+    const funds = mf.data || [];
+    funds.slice(0, 3).forEach((f: any, i: number) => {
+      response += `${i + 1}. **${f.schemeName}** — NAV: ${f.latestNAV} | 1Y: ${f.oneYearReturnPercent}% | ${f.fundHouse}\n`;
+    });
+    response += '\n';
+  }
+
+  if (!analysis && !search && !fno && !mf) {
+    response = `I ran the analysis tools but couldn't retrieve data for your query. Please try again with a specific stock ticker (e.g., "RELIANCE.NS"), mutual fund name, or F&O symbol.`;
+  }
+
+  response += `\n---\n*Generated from local tool data (LLM unavailable). Not financial advice.*`;
+  return response;
+};
+
+// ─── MAIN AGENT LOOP ───
 
 export const runAgentStream = async (
   userMessage: string,
@@ -290,7 +360,6 @@ export const runAgentStream = async (
   effort: 'default' | 'medium' | 'high',
   callbacks: StreamCallbacks
 ): Promise<void> => {
-  let provider: 'nvidia' | 'openrouter' = API_CONFIG.NVIDIA_NIM_KEY ? 'nvidia' : 'openrouter';
   const allToolActivity: ToolActivity[] = [];
   const sourceMap = new Map<string, SourceRef>();
 
@@ -309,7 +378,6 @@ export const runAgentStream = async (
   ];
 
   let finalContent = '';
-  let lastError: Error | null = null;
   let streamingFailed = false;
 
   for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
@@ -321,29 +389,32 @@ export const runAgentStream = async (
 
       if (!streamingFailed) {
         try {
-          const result = await callLLMStream(messages, true, provider, callbacks);
+          const result = await callLLMStream(messages, true, callbacks);
           content = result.content;
           toolCalls = result.toolCalls;
         } catch (streamErr: any) {
-          console.warn('[Agent] Streaming failed, falling back to non-streaming:', streamErr.message);
+          console.warn('[Agent] NVIDIA streaming failed, falling back to non-streaming:', streamErr.message);
           streamingFailed = true;
-          // Fall through to non-streaming
         }
       }
 
       if (streamingFailed || content === '') {
         // Non-streaming fallback
         console.log('[Agent] Using non-streaming fallback');
-        const response = await callLLMNonStream(messages, true, provider);
-        content = response.content || '';
-        toolCalls = response.tool_calls || [];
+        try {
+          const response = await callLLMNonStream(messages, true);
+          content = response.content || '';
+          toolCalls = response.tool_calls || [];
+        } catch (nonStreamErr: any) {
+          console.error('[Agent] Non-streaming also failed:', nonStreamErr.message);
+          throw nonStreamErr;
+        }
       }
 
       finalContent += content;
       console.log(`[Agent] Iteration ${iteration + 1}: content length ${content.length}, toolCalls: ${toolCalls.length}`);
 
       if (toolCalls.length === 0) {
-        // Collect all sources from tool activities
         const allSources: SourceRef[] = [];
         allToolActivity.forEach(a => a.sources?.forEach(s => allSources.push(s)));
         callbacks.onComplete({
@@ -373,7 +444,6 @@ export const runAgentStream = async (
         const activity: ToolActivity = { tool: toolName, args, summary: result.summary, success: result.success, sources: result.sources };
         allToolActivity.push(activity);
 
-        // Track sources globally
         result.sources?.forEach(s => sourceMap.set(`${s.type}:${s.domain}`, s));
 
         callbacks.onToolActivity(activity);
@@ -385,102 +455,31 @@ export const runAgentStream = async (
         });
       }
     } catch (e: any) {
-      lastError = e;
       console.error(`[Agent] Iteration ${iteration + 1} error:`, e);
-      if (provider === 'nvidia' && API_CONFIG.OPENROUTER_KEY && !streamingFailed) {
-        console.warn('[Agent] Switching to OpenRouter...');
-        provider = 'openrouter';
-        streamingFailed = false; // Try streaming again with new provider
-        continue;
-      }
-      if (provider === 'nvidia' && API_CONFIG.OPENROUTER_KEY && streamingFailed) {
-        console.warn('[Agent] Switching to OpenRouter (non-streaming)...');
-        provider = 'openrouter';
-        continue;
-      }
-      break;
+      // If both streaming and non-streaming fail, use local synthesis
+      const localResponse = synthesizeFromTools(userMessage, allToolActivity);
+      const allSources: SourceRef[] = [];
+      allToolActivity.forEach(a => a.sources?.forEach(s => allSources.push(s)));
+      callbacks.onComplete({
+        content: localResponse,
+        toolActivity: allToolActivity,
+        sources: allSources,
+        sourceMap
+      });
+      return;
     }
   }
 
-  if (lastError) {
-    callbacks.onError(lastError);
-    return;
-  }
-
-  // If we got here without completing, return what we have
+  // Max iterations reached
+  const localResponse = synthesizeFromTools(userMessage, allToolActivity);
   const allSources: SourceRef[] = [];
   allToolActivity.forEach(a => a.sources?.forEach(s => allSources.push(s)));
   callbacks.onComplete({
-    content: finalContent.trim() || 'Agent completed but returned no content.',
+    content: localResponse,
     toolActivity: allToolActivity,
     sources: allSources,
     sourceMap
   });
-};
-
-// ─── NON-STREAM FALLBACK ───
-
-export const runAgent = async (
-  userMessage: string,
-  userId: string,
-  effort: 'default' | 'medium' | 'high',
-  onToolActivity: (activity: ToolActivity) => void,
-  onProgress?: (status: string) => void
-): Promise<{ content: string; toolActivity: ToolActivity[]; sources: SourceRef[] }> => {
-  await loadAgentMemory(userId);
-  const recentHistory = await loadRecentChatHistory(userId, 15);
-
-  const systemPrompt = EFFORT_SYSTEM_PROMPTS[effort];
-  const messages: any[] = [
-    { role: 'system', content: systemPrompt },
-    ...recentHistory.slice(-10).map(m => ({ role: m.role, content: m.content })),
-    { role: 'user', content: userMessage }
-  ];
-
-  let provider: 'nvidia' | 'openrouter' = API_CONFIG.NVIDIA_NIM_KEY ? 'nvidia' : 'openrouter';
-  const allToolActivity: ToolActivity[] = [];
-  const sourceMap = new Map<string, SourceRef>();
-  let finalContent = '';
-
-  for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-    try {
-      onProgress?.(iteration === 0 ? 'Thinking...' : `Analyzing... (step ${iteration + 1})`);
-      const response = await callLLMNonStream(messages, true, provider);
-      const toolCalls = response.tool_calls || [];
-
-      if (toolCalls.length === 0) {
-        finalContent = response.content || 'No response generated.';
-        const allSources: SourceRef[] = [];
-        allToolActivity.forEach(a => a.sources?.forEach(s => allSources.push(s)));
-        return { content: finalContent, toolActivity: allToolActivity, sources: allSources };
-      }
-
-      messages.push({ role: 'assistant', content: response.content, tool_calls: toolCalls });
-
-      for (const tc of toolCalls) {
-        const toolName = tc.function?.name;
-        let args: any = {};
-        try { args = typeof tc.function.arguments === 'string' ? JSON.parse(tc.function.arguments) : tc.function.arguments || {}; } catch {}
-        onProgress?.(`Running ${toolName}...`);
-        let result: ToolResult;
-        const executor = TOOL_EXECUTORS[toolName];
-        if (executor) { try { result = await executor(args); } catch (e: any) { result = { success: false, data: null, summary: `Tool error: ${e.message}`, sources: [] }; } }
-        else { result = { success: false, data: null, summary: `Unknown tool: ${toolName}`, sources: [] }; }
-        const activity: ToolActivity = { tool: toolName, args, summary: result.summary, success: result.success, sources: result.sources };
-        allToolActivity.push(activity);
-        result.sources?.forEach(s => sourceMap.set(`${s.type}:${s.domain}`, s));
-        onToolActivity(activity);
-        messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify({ success: result.success, summary: result.summary, data: result.data }).substring(0, 15000) });
-      }
-    } catch (e: any) {
-      if (provider === 'nvidia' && API_CONFIG.OPENROUTER_KEY) { provider = 'openrouter'; continue; }
-      break;
-    }
-  }
-
-  const allSources: SourceRef[] = [];
-  allToolActivity.forEach(a => a.sources?.forEach(s => allSources.push(s)));
-  return { content: finalContent || 'Agent could not complete request.', toolActivity: allToolActivity, sources: allSources };
 };
 
 export const saveUserMessage = async (userId: string, message: ChatMessage): Promise<void> => {

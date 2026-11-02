@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   FileText, Sparkles, X, Minus, Maximize2, Minimize2, Copy, Check, 
   ExternalLink, TrendingUp, TrendingDown, ShieldAlert, 
-  CheckCircle2, Info, Lightbulb, Layers
+  CheckCircle2, Info, Lightbulb, Layers, Pin, PinOff, Move
 } from 'lucide-react';
 
 export interface FloatingResearchReportProps {
@@ -424,12 +425,34 @@ export const FloatingResearchReport: React.FC<FloatingResearchReportProps> = ({
   stockName,
   source
 }) => {
+  const [isPinned, setIsPinned] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [activeSection, setActiveSection] = useState<number>(0);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isScrolledAway, setIsScrolledAway] = useState(false);
+
+  // Position on screen (for unpinned fixed mode)
+  const [pos, setPos] = useState<{ x: number; y: number }>(() => {
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    const h = typeof window !== 'undefined' ? window.innerHeight : 800;
+    const width = Math.min(680, w - 24);
+    return {
+      x: Math.max(12, w - width - 24),
+      y: Math.max(40, Math.min(80, (h - Math.min(h * 0.84, 800)) / 2))
+    };
+  });
+
+  // Document position (for pinned absolute mode)
+  const [docPos, setDocPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Refs for tracking drag and scroll
+  const originScrollY = useRef(0);
+  const isDragging = useRef(false);
+  const dragStartMouse = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const dialogRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Parse research paper text
   const rawText = useMemo(() => {
@@ -465,6 +488,64 @@ export const FloatingResearchReport: React.FC<FloatingResearchReportProps> = ({
     });
   }, [sections]);
 
+  // When opened, initialize origin and default position
+  useEffect(() => {
+    if (isOpen) {
+      const currentScroll = window.scrollY;
+      originScrollY.current = currentScroll;
+      setIsPinned(false);
+      setIsScrolledAway(false);
+
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const width = isExpanded ? Math.min(1040, w - 32) : Math.min(680, w - 24);
+      const startX = Math.max(12, w - width - 24);
+      const startY = Math.max(30, Math.min(70, (h - Math.min(h * 0.84, 800)) / 2));
+      
+      setPos({ x: startX, y: startY });
+      setDocPos({ x: startX, y: currentScroll + startY });
+    }
+  }, [isOpen, isExpanded]);
+
+  // Scroll detection: pin when scrolling away, unpin when scrolling back to report
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePageScroll = () => {
+      if (isDragging.current) return;
+
+      const currentScroll = window.scrollY;
+      const distance = Math.abs(currentScroll - originScrollY.current);
+
+      // Scrolled away threshold: 120px
+      if (distance > 120) {
+        setIsPinned(true);
+        setIsScrolledAway(distance > 380);
+      } else {
+        // Scrolled back to report: auto-unpin so user can move it again!
+        setIsPinned(false);
+        setIsScrolledAway(false);
+      }
+    };
+
+    window.addEventListener('scroll', handlePageScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handlePageScroll);
+  }, [isOpen]);
+
+  // Keep coordinates clamped on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setPos((prev) => {
+        const width = dialogRef.current?.offsetWidth || 680;
+        const clampedX = Math.max(8, Math.min(window.innerWidth - width - 8, prev.x));
+        const clampedY = Math.max(12, Math.min(window.innerHeight - 80, prev.y));
+        return { x: clampedX, y: clampedY };
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Handle ESC key to minimize or close
   useEffect(() => {
     if (!isOpen) return;
@@ -480,6 +561,89 @@ export const FloatingResearchReport: React.FC<FloatingResearchReportProps> = ({
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
   }, [isOpen, isExpanded, onClose]);
+
+  // Mouse Drag Handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    const target = e.target as HTMLElement;
+    // Don't drag if clicking buttons, links, or text inputs
+    if (target.closest('button') || target.closest('a') || target.closest('input')) return;
+
+    isDragging.current = true;
+    dragStartMouse.current = { x: e.clientX, y: e.clientY };
+    dragStartPos.current = { x: pos.x, y: pos.y };
+
+    // When dragging, automatically unpin and update anchor to current view
+    setIsPinned(false);
+    originScrollY.current = window.scrollY;
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!isDragging.current) return;
+      const deltaX = moveEvent.clientX - dragStartMouse.current.x;
+      const deltaY = moveEvent.clientY - dragStartMouse.current.y;
+
+      const width = dialogRef.current?.offsetWidth || 680;
+      const clampedX = Math.max(8, Math.min(window.innerWidth - width - 8, dragStartPos.current.x + deltaX));
+      const clampedY = Math.max(12, Math.min(window.innerHeight - 80, dragStartPos.current.y + deltaY));
+
+      setPos({ x: clampedX, y: clampedY });
+      setDocPos({ x: clampedX, y: window.scrollY + clampedY });
+    };
+
+    const handleMouseUp = () => {
+      isDragging.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  }, [pos.x, pos.y]);
+
+  // Touch Drag Handlers
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('input')) return;
+    const touch = e.touches[0];
+    isDragging.current = true;
+    dragStartMouse.current = { x: touch.clientX, y: touch.clientY };
+    dragStartPos.current = { x: pos.x, y: pos.y };
+
+    setIsPinned(false);
+    originScrollY.current = window.scrollY;
+  }, [pos.x, pos.y]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!isDragging.current) return;
+    const touch = e.touches[0];
+    const deltaX = touch.clientX - dragStartMouse.current.x;
+    const deltaY = touch.clientY - dragStartMouse.current.y;
+
+    const width = dialogRef.current?.offsetWidth || 680;
+    const clampedX = Math.max(8, Math.min(window.innerWidth - width - 8, dragStartPos.current.x + deltaX));
+    const clampedY = Math.max(12, Math.min(window.innerHeight - 80, dragStartPos.current.y + deltaY));
+
+    setPos({ x: clampedX, y: clampedY });
+    setDocPos({ x: clampedX, y: window.scrollY + clampedY });
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    isDragging.current = false;
+  }, []);
+
+  // Manual Pin Toggle
+  const togglePin = useCallback(() => {
+    setIsPinned((prev) => {
+      const next = !prev;
+      if (next) {
+        originScrollY.current = window.scrollY;
+        setDocPos({ x: pos.x, y: window.scrollY + pos.y });
+      } else {
+        originScrollY.current = window.scrollY;
+      }
+      return next;
+    });
+  }, [pos.x, pos.y]);
 
   // Copy full report
   const handleCopy = useCallback(() => {
@@ -499,160 +663,224 @@ export const FloatingResearchReport: React.FC<FloatingResearchReportProps> = ({
 
   if (!isOpen) return null;
 
-  // MINIMIZED DOCKED PILL: Sleek floating widget at bottom right
-  if (isMinimized) {
-    return (
-      <div className="fixed bottom-6 right-6 z-[9995] animate-bounce-subtle pointer-events-auto">
-        <div 
-          onClick={() => setIsMinimized(false)}
-          className="flex items-center gap-3 px-4 py-3 bg-[#0A0A0A]/95 hover:bg-[#141414] text-white border border-[#C4A77D]/40 rounded-full shadow-2xl backdrop-blur-md cursor-pointer transition-all duration-300 hover:scale-105 group"
+  // Window position style:
+  // - When unpinned: position: fixed at pos.x, pos.y (movable anywhere!)
+  // - When pinned: position: absolute at docPos.x, docPos.y (pins to webpage as user scrolls!)
+  const windowStyle: React.CSSProperties = isPinned
+    ? {
+        position: 'absolute',
+        left: `${docPos.x}px`,
+        top: `${docPos.y}px`,
+        zIndex: 9990
+      }
+    : {
+        position: 'fixed',
+        left: `${pos.x}px`,
+        top: `${pos.y}px`,
+        zIndex: 9990
+      };
+
+  const portalContent = (
+    <>
+      {/* SCROLLED-AWAY PINNED RETURN PILL: Appears when pinned and scrolled away so user can easily scroll back */}
+      {isPinned && isScrolledAway && !isMinimized && (
+        <button
+          onClick={() => {
+            window.scrollTo({ top: originScrollY.current, behavior: 'smooth' });
+          }}
+          className="fixed bottom-6 right-6 z-[9995] flex items-center gap-2.5 px-4 py-2.5 bg-[#0A0A0A]/95 hover:bg-[#141414] text-white border border-[#C4A77D]/60 rounded-full shadow-2xl backdrop-blur-md cursor-pointer transition-all duration-300 hover:scale-105 group pointer-events-auto animate-bounce-subtle"
+          title="Click to scroll main website back to Research Report"
         >
-          <div className="w-8 h-8 rounded-full bg-[#C4A77D]/20 flex items-center justify-center text-[#C4A77D] group-hover:bg-[#C4A77D] group-hover:text-black transition-colors">
-            <FileText className="w-4 h-4" />
-          </div>
-          <div className="text-left pr-1">
-            <div className="text-xs font-semibold tracking-wide flex items-center gap-1.5">
-              <span>{stockName} Research</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            </div>
-            <div className="text-[10px] text-[#C4A77D] font-mono">Docked • Click to restore</div>
-          </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors"
-            title="Close"
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <Pin className="w-3.5 h-3.5 text-[#C4A77D] group-hover:rotate-45 transition-transform" />
+          <span className="text-xs font-mono">
+            {stockName} Report Pinned • <span className="text-[#C4A77D] underline font-bold">Scroll Back</span>
+          </span>
+        </button>
+      )}
+
+      {/* MINIMIZED DOCKED PILL */}
+      {isMinimized ? (
+        <div className="fixed bottom-6 right-6 z-[9995] animate-bounce-subtle pointer-events-auto">
+          <div 
+            onClick={() => setIsMinimized(false)}
+            className="flex items-center gap-3 px-4 py-3 bg-[#0A0A0A]/95 hover:bg-[#141414] text-white border border-[#C4A77D]/40 rounded-full shadow-2xl backdrop-blur-md cursor-pointer transition-all duration-300 hover:scale-105 group"
           >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // FLOATING FIXED POPUP WINDOW
-  // Crucial: Container has pointer-events: none so main website is fully scrollable and interactive!
-  // Only the floating window element itself has pointer-events: auto.
-  return (
-    <div className="fixed inset-0 pointer-events-none z-[9990] flex items-end justify-end p-4 md:p-6">
-      <div
-        ref={dialogRef}
-        className={`pointer-events-auto flex flex-col bg-[#FAF8F5] dark:bg-[#111111] text-neutral-900 dark:text-neutral-100 rounded-2xl shadow-[0_25px_70px_rgba(0,0,0,0.4)] border border-[#E5E0D8] dark:border-white/15 overflow-hidden transition-all duration-300 ease-out ${
-          isExpanded
-            ? 'w-[calc(100vw-32px)] md:w-[1040px] h-[92vh] max-h-[92vh]'
-            : 'w-[calc(100vw-24px)] md:w-[680px] h-[84vh] max-h-[820px]'
-        }`}
-        style={{
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(196, 167, 125, 0.3)'
-        }}
-      >
-        {/* WINDOW HEADER */}
-        <div className="flex items-center justify-between px-5 py-3.5 bg-white dark:bg-[#181818] border-b border-[#E5E0D8] dark:border-white/10 select-none shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#C4A77D]/15 flex items-center justify-center text-[#C4A77D]">
-              <FileText className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-full bg-[#C4A77D]/20 flex items-center justify-center text-[#C4A77D] group-hover:bg-[#C4A77D] group-hover:text-black transition-colors">
+              <FileText className="w-4 h-4" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold tracking-tight text-neutral-900 dark:text-white">
-                  {stockName}
-                </h2>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-[#C4A77D]/15 text-[#C4A77D] font-semibold uppercase tracking-wider">
-                  Equity Research
-                </span>
+            <div className="text-left pr-1">
+              <div className="text-xs font-semibold tracking-wide flex items-center gap-1.5">
+                <span>{stockName} Research</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
-                <Sparkles className="w-3 h-3 text-[#C4A77D]" />
-                <span className="truncate max-w-[200px] md:max-w-xs">{source}</span>
+              <div className="text-[10px] text-[#C4A77D] font-mono">Docked • Click to restore</div>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="w-6 h-6 rounded-full hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-colors"
+              title="Close"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* FLOATING / PINNED RESEARCH WINDOW */
+        <div
+          ref={dialogRef}
+          style={windowStyle}
+          className={`pointer-events-auto flex flex-col bg-[#FAF8F5] dark:bg-[#111111] text-neutral-900 dark:text-neutral-100 rounded-2xl shadow-[0_25px_70px_rgba(0,0,0,0.45)] border border-[#E5E0D8] dark:border-white/15 overflow-hidden transition-all duration-150 ease-out select-none ${
+            isExpanded
+              ? 'w-[calc(100vw-32px)] md:w-[1040px] h-[92vh] max-h-[92vh]'
+              : 'w-[calc(100vw-24px)] md:w-[680px] h-[84vh] max-h-[820px]'
+          }`}
+        >
+          {/* DRAGGABLE WINDOW HEADER */}
+          <div 
+            onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="px-5 pt-2.5 pb-3 bg-white dark:bg-[#181818] border-b border-[#E5E0D8] dark:border-white/10 select-none shrink-0 cursor-grab active:cursor-grabbing"
+            title="Drag header to move window anywhere on screen"
+          >
+            {/* Visual Drag Handle Bar */}
+            <div className="w-14 h-1.5 rounded-full bg-neutral-300 dark:bg-white/20 mx-auto mb-2 cursor-grab active:cursor-grabbing hover:bg-[#C4A77D] transition-colors" />
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#C4A77D]/15 flex items-center justify-center text-[#C4A77D]">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-bold tracking-tight text-neutral-900 dark:text-white">
+                      {stockName}
+                    </h2>
+                    {/* Pin/Unpin Status Pill */}
+                    {isPinned ? (
+                      <span 
+                        className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold uppercase tracking-wider flex items-center gap-1 cursor-default"
+                        title="Pinned to webpage section. Scroll back to report to unpin and move freely."
+                      >
+                        <Pin className="w-2.5 h-2.5 text-amber-500" /> Pinned
+                      </span>
+                    ) : (
+                      <span 
+                        className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider flex items-center gap-1 cursor-grab"
+                        title="Unpinned: drag header to move anywhere. Scrolling page will pin it in place."
+                      >
+                        <Move className="w-2.5 h-2.5 text-emerald-500" /> Movable
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400 font-mono">
+                    <Sparkles className="w-3 h-3 text-[#C4A77D]" />
+                    <span className="truncate max-w-[180px] md:max-w-xs">{source}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* WINDOW CONTROLS */}
+              <div className="flex items-center gap-1">
+                {/* Manual Pin / Unpin Button */}
+                <button
+                  onClick={togglePin}
+                  className="p-2 rounded-lg text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors"
+                  title={isPinned ? "Click to Unpin (move freely)" : "Click to Pin (stay in current location)"}
+                >
+                  {isPinned ? <Pin className="w-4 h-4 text-amber-500" /> : <PinOff className="w-4 h-4 text-emerald-500 hover:text-amber-500" />}
+                </button>
+
+                {/* Copy Report */}
+                <button
+                  onClick={handleCopy}
+                  className="p-2 rounded-lg text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors"
+                  title={copied ? "Copied to clipboard!" : "Copy Full Report"}
+                >
+                  {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                </button>
+
+                {/* Minimize to Dock Pill */}
+                <button
+                  onClick={() => setIsMinimized(true)}
+                  className="p-2 rounded-lg text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors"
+                  title="Minimize to Floating Dock"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+
+                {/* Maximize / Restore */}
+                <button
+                  onClick={() => setIsExpanded(!isExpanded)}
+                  className="p-2 rounded-lg text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors hidden sm:inline-flex"
+                  title={isExpanded ? "Restore Size" : "Expand Full View"}
+                >
+                  {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+
+                {/* Close */}
+                <button
+                  onClick={onClose}
+                  className="p-2 rounded-lg text-neutral-500 hover:text-red-500 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-colors ml-1"
+                  title="Close Research Report"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             </div>
           </div>
 
-          {/* WINDOW CONTROLS */}
-          <div className="flex items-center gap-1.5">
-            {/* Copy Report */}
-            <button
-              onClick={handleCopy}
-              className="p-2 rounded-lg text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors"
-              title={copied ? "Copied to clipboard!" : "Copy Full Report"}
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
-            </button>
+          {/* QUICK SECTION NAVIGATION PILL BAR */}
+          {sectionTitles.length > 1 && (
+            <div className="flex items-center gap-1.5 px-4 py-2 bg-[#F3EFEA] dark:bg-[#151515] border-b border-[#E5E0D8] dark:border-white/10 overflow-x-auto hide-scrollbar shrink-0 text-xs font-medium select-none">
+              <span className="text-[10px] text-neutral-400 uppercase font-mono tracking-wider shrink-0 mr-1 flex items-center gap-1">
+                <Layers className="w-3 h-3 text-[#C4A77D]" /> Jump:
+              </span>
+              {sectionTitles.map((title, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => jumpToSection(idx)}
+                  className={`px-2.5 py-1 rounded-full whitespace-nowrap transition-all text-[11px] font-mono ${
+                    activeSection === idx
+                      ? 'bg-[#C4A77D] text-black font-bold shadow-sm'
+                      : 'bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 text-neutral-700 dark:text-neutral-300'
+                  }`}
+                >
+                  {idx + 1}. {title}
+                </button>
+              ))}
+            </div>
+          )}
 
-            {/* Minimize to Dock Pill */}
-            <button
-              onClick={() => setIsMinimized(true)}
-              className="p-2 rounded-lg text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors"
-              title="Minimize to Floating Dock"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-
-            {/* Maximize / Restore */}
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="p-2 rounded-lg text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors hidden sm:inline-flex"
-              title={isExpanded ? "Restore Size" : "Expand Full View"}
-            >
-              {isExpanded ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
-
-            {/* Close */}
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg text-neutral-500 hover:text-red-500 hover:bg-red-500/10 dark:hover:bg-red-500/20 transition-colors ml-1"
-              title="Close Research Report"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* QUICK SECTION NAVIGATION PILL BAR */}
-        {sectionTitles.length > 1 && (
-          <div className="flex items-center gap-1.5 px-4 py-2 bg-[#F3EFEA] dark:bg-[#151515] border-b border-[#E5E0D8] dark:border-white/10 overflow-x-auto hide-scrollbar shrink-0 text-xs font-medium">
-            <span className="text-[10px] text-neutral-400 uppercase font-mono tracking-wider shrink-0 mr-1 flex items-center gap-1">
-              <Layers className="w-3 h-3 text-[#C4A77D]" /> Jump:
-            </span>
-            {sectionTitles.map((title, idx) => (
-              <button
-                key={idx}
-                onClick={() => jumpToSection(idx)}
-                className={`px-2.5 py-1 rounded-full whitespace-nowrap transition-all text-[11px] font-mono ${
-                  activeSection === idx
-                    ? 'bg-[#C4A77D] text-black font-bold shadow-sm'
-                    : 'bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 text-neutral-700 dark:text-neutral-300'
-                }`}
-              >
-                {idx + 1}. {title}
-              </button>
+          {/* SCROLLABLE RESEARCH REPORT BODY */}
+          <div
+            ref={scrollRef}
+            className="research-dialog-body flex-1 overflow-y-auto px-5 md:px-7 py-6 space-y-2 focus:outline-none select-text"
+          >
+            {sections.map((section, idx) => (
+              <SectionRenderer key={idx} sectionText={section} sectionIndex={idx} />
             ))}
           </div>
-        )}
 
-        {/* SCROLLABLE RESEARCH REPORT BODY */}
-        <div
-          ref={scrollRef}
-          className="research-dialog-body flex-1 overflow-y-auto px-5 md:px-7 py-6 space-y-2 focus:outline-none"
-        >
-          {sections.map((section, idx) => (
-            <SectionRenderer key={idx} sectionText={section} sectionIndex={idx} />
-          ))}
-        </div>
-
-        {/* WINDOW FOOTER */}
-        <div className="px-5 py-2.5 bg-[#F5F1EB] dark:bg-[#161616] border-t border-[#E5E0D8] dark:border-white/10 flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400 font-mono shrink-0">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="hidden sm:inline">Institutional Multi-Agent Synthesis</span>
+          {/* WINDOW FOOTER */}
+          <div className="px-5 py-2.5 bg-[#F5F1EB] dark:bg-[#161616] border-t border-[#E5E0D8] dark:border-white/10 flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400 font-mono shrink-0 select-none">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span className="hidden sm:inline">Institutional Multi-Agent Synthesis</span>
+            </div>
+            <span className="text-[10px] uppercase tracking-wider text-neutral-400">
+              {isPinned ? '📌 Pinned to section • Scroll back to unpin' : '🔓 Drag header to move freely'}
+            </span>
           </div>
-          <span className="text-[10px] uppercase tracking-wider text-neutral-400">
-            Scroll page freely • Report stays pinned
-          </span>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
+
+  return typeof document !== 'undefined' ? createPortal(portalContent, document.body) : null;
 };

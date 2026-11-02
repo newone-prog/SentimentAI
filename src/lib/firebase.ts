@@ -1,5 +1,4 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -23,7 +22,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 
 googleProvider.setCustomParameters({
@@ -72,5 +70,5 @@ export const checkRedirectResult = async (): Promise<User | null> => {
   }
 };
 
-export { auth, googleProvider, db };
+export { auth, googleProvider };
 export type { User };

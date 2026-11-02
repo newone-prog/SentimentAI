@@ -5,10 +5,10 @@ export const API_CONFIG = {
   MARKETSTACK_API_KEY: import.meta.env.VITE_MARKETSTACK_API_KEY || '',
   INDIANAPI_KEY: import.meta.env.VITE_INDIANAPI_KEY || '',
   NVIDIA_NIM_KEY: import.meta.env.VITE_NVIDIA_NIM_KEY || '',
-  OPENROUTER_KEY: import.meta.env.VITE_OPENROUTER_KEY || '',
   ALPHA_VANTAGE_KEY: import.meta.env.VITE_ALPHA_VANTAGE_KEY || '',
   FMP_API_KEY: import.meta.env.VITE_FMP_API_KEY || '',
   TAVILY_API_KEY: import.meta.env.VITE_TAVILY_API_KEY || '',
+  OPENROUTER_KEY: import.meta.env.VITE_OPENROUTER_KEY || '',
   FIREBASE_PROJECT_ID: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
   FIREBASE_CLIENT_EMAIL: import.meta.env.VITE_FIREBASE_CLIENT_EMAIL || '',
   FIREBASE_PRIVATE_KEY: import.meta.env.VITE_FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n') || '',
@@ -19,7 +19,7 @@ export const NEMOTRON_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
 
 // Validate required keys in development
 if (import.meta.env.DEV) {
-  const requiredKeys = ['NVIDIA_NIM_KEY', 'OPENROUTER_KEY'];
+  const requiredKeys = ['NVIDIA_NIM_KEY'];
   const missingKeys = requiredKeys.filter(key => !API_CONFIG[key as keyof typeof API_CONFIG]);
 
   if (missingKeys.length > 0) {

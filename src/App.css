@@ -415,6 +415,31 @@ button[class*="rounded-full"]:hover {
   animation: bounceSubtle 3s ease-in-out infinite;
 }
 
+/* Drag cursor and header handle */
+.cursor-grab {
+  cursor: grab;
+}
+
+.cursor-grab:active,
+.cursor-grabbing {
+  cursor: grabbing !important;
+}
+
+.research-drag-handle {
+  width: 52px;
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(196, 167, 125, 0.4);
+  margin: 0 auto 6px;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.research-drag-handle:hover {
+  background: #C4A77D;
+  width: 64px;
+}
+
 .research-dialog-body {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
