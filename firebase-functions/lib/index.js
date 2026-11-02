@@ -423,7 +423,7 @@ async function getLLMAnalysis(context) {
     // Proxy to NVIDIA NIM or OpenRouter securely
     const nvidiaKey = process.env.NVIDIA_NIM_KEY || "";
     const openRouterKey = process.env.OPENROUTER_KEY || "";
-    const model = "openai/gpt-oss-20b";
+    const model = "nvidia/nemotron-3-ultra-550b-a55b";
     const prompt = `You are a senior equity research analyst. Analyze ONLY the data provided. Return valid JSON.
 Company: ${context.company}
 Symbol: ${context.symbol}

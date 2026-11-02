@@ -1,4 +1,5 @@
 
+import { DEFAULT_MODEL } from './apiConfig';
 import { type StockData, type SentimentAnalysis } from './api';
 
 export interface DevilsAdvocateResponse {
@@ -21,7 +22,7 @@ export interface DevilsAdvocateResponse {
   source: string;
 }
 
-const NVIDIA_MODEL = "openai/gpt-oss-20b";
+const NVIDIA_MODEL = DEFAULT_MODEL;
 const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
 
 export const getDevilsAdvocateAnalysis = async (

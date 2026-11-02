@@ -3,7 +3,7 @@ export class OpenRouterClient {
     return process.env.OPENROUTER_KEY || process.env.VITE_OPENROUTER_KEY || "";
   }
 
-  private static model = "openai/gpt-oss-20b";
+  private static model = "nvidia/nemotron-3-ultra-550b-a55b";
 
   private static getNvidiaKey(): string {
     return process.env.NVIDIA_NIM_KEY || process.env.VITE_NVIDIA_NIM_KEY || "";

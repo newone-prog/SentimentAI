@@ -1,5 +1,12 @@
-import { API_CONFIG, DEFAULT_MODEL } from '../apiConfig';
+import { API_CONFIG, DEFAULT_MODEL, NEMOTRON_MODELS } from '../apiConfig';
 import { TOOL_DEFINITIONS, TOOL_EXECUTORS, type ToolResult, type SourceRef } from './agentTools';
+
+export const getValidModelId = (id?: string): string => {
+  if (id && NEMOTRON_MODELS.some(m => m.id === id)) {
+    return id;
+  }
+  return DEFAULT_MODEL;
+};
 
 export type { SourceRef };
 
@@ -258,7 +265,7 @@ const callLLMNonStream = async (
   const body: any = { model: modelId, messages, temperature: 0.2, max_tokens: 8192 };
   if (useTools) { body.tools = TOOL_DEFINITIONS; body.tool_choice = 'auto'; }
 
-  console.log(`[Agent] Calling NVIDIA Nemotron 3 Ultra (non-streaming)...`);
+  console.log(`[Agent] Calling NVIDIA ${modelId} (non-streaming)...`);
 
   const res = await fetchWithTimeout(url, { method: 'POST', headers, body: JSON.stringify(body) });
   if (!res.ok) {
@@ -480,6 +487,9 @@ export const runAgentStream = async (
     { role: 'user', content: userMessage }
   ];
 
+  let activeModelId: string = getValidModelId(modelId);
+  console.log(`[Agent] Starting run with active model: ${activeModelId}`);
+
   let finalContent = '';
   let streamingFailed = false;
 
@@ -492,25 +502,47 @@ export const runAgentStream = async (
 
       if (!streamingFailed) {
         try {
-          const result = await callLLMStream(messages, true, callbacks, modelId);
+          const result = await callLLMStream(messages, true, callbacks, activeModelId);
           content = result.content;
           toolCalls = result.toolCalls;
         } catch (streamErr: any) {
-          console.warn('[Agent] NVIDIA streaming failed, falling back to non-streaming:', streamErr.message);
-          streamingFailed = true;
+          console.warn('[Agent] NVIDIA streaming failed:', streamErr.message);
+          // If model was 404 or 410 and activeModelId is not DEFAULT_MODEL, switch to DEFAULT_MODEL immediately
+          if (activeModelId !== DEFAULT_MODEL && (streamErr.message?.includes('404') || streamErr.message?.includes('410') || streamErr.message?.includes('not found'))) {
+            console.warn(`[Agent] Model ${activeModelId} returned 404/410, auto-recovering to ${DEFAULT_MODEL}`);
+            activeModelId = DEFAULT_MODEL;
+            try {
+              const retryResult = await callLLMStream(messages, true, callbacks, activeModelId);
+              content = retryResult.content;
+              toolCalls = retryResult.toolCalls;
+            } catch (retryErr: any) {
+              console.warn('[Agent] Streaming retry with default model also failed:', retryErr.message);
+              streamingFailed = true;
+            }
+          } else {
+            streamingFailed = true;
+          }
         }
       }
 
       if (streamingFailed || content === '') {
         // Non-streaming fallback
-        console.log('[Agent] Using non-streaming fallback');
+        console.log(`[Agent] Using non-streaming fallback with model: ${activeModelId}`);
         try {
-          const response = await callLLMNonStream(messages, true, modelId);
+          const response = await callLLMNonStream(messages, true, activeModelId);
           content = response.content || '';
           toolCalls = response.tool_calls || [];
         } catch (nonStreamErr: any) {
-          console.error('[Agent] Non-streaming also failed:', nonStreamErr.message);
-          throw nonStreamErr;
+          if (activeModelId !== DEFAULT_MODEL && (nonStreamErr.message?.includes('404') || nonStreamErr.message?.includes('410') || nonStreamErr.message?.includes('not found'))) {
+            console.warn(`[Agent] Non-streaming model ${activeModelId} failed (404/410). Retrying with default model: ${DEFAULT_MODEL}`);
+            activeModelId = DEFAULT_MODEL;
+            const retryResponse = await callLLMNonStream(messages, true, activeModelId);
+            content = retryResponse.content || '';
+            toolCalls = retryResponse.tool_calls || [];
+          } else {
+            console.error('[Agent] Non-streaming also failed:', nonStreamErr.message);
+            throw nonStreamErr;
+          }
         }
       }
 

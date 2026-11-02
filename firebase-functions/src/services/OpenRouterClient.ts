@@ -4,7 +4,7 @@ export class OpenRouterClient {
   static async generate(prompt: string, systemPrompt: string): Promise<string> {
     const nvidiaKey = process.env.NVIDIA_NIM_KEY || process.env.VITE_NVIDIA_NIM_KEY;
     const openrouterKey = process.env.OPENROUTER_KEY || process.env.VITE_OPENROUTER_KEY;
-    const model = 'openai/gpt-oss-20b';
+    const model = 'nvidia/nemotron-3-ultra-550b-a55b';
 
     // 1. Try NVIDIA NIM First
     if (nvidiaKey) {

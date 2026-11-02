@@ -47,6 +47,18 @@ const buildAlgorithmicResearchReport = (ticker, companyName, priceData, allAgent
     const researchPaper = `### 1. Executive Summary & Macroeconomic Overview
 **${companyName || ticker}** (${ticker}) is presently trading at **${currentPrice} ${currency}**, recording an intraday change of **${changePercent >= 0 ? '+' : ''}${typeof changePercent === 'number' ? changePercent.toFixed(2) : changePercent}%** on an aggregate volume of **${Number(volume).toLocaleString()}** shares. Over the trailing 52-week cycle, the stock has traded within a band bounded by a low of **${fiftyTwoWeekLow} ${currency}** and a peak of **${fiftyTwoWeekHigh} ${currency}**. Multi-agent quantitative filters evaluate the current structural bias as **${verdict}** with an algorithmic model confidence of **${confidence}%**.
 
+- **Model Confidence**: ${confidence}%
+- **Fear & Greed Index**: ${fearGreed}/100
+- **Social Heat**: ${socialHeat}%
+
+| Factor / Indicator | Current Reading | 52W Benchmark | Quantitative Signal |
+| :--- | :--- | :--- | :--- |
+| **Spot Pricing** | ${currentPrice} ${currency} | ${fiftyTwoWeekLow} - ${fiftyTwoWeekHigh} | ${verdict} Alignment |
+| **Momentum (RSI 14)** | ${rsiVal} | 30 - 70 Neutral Band | ${rsiVal > 60 ? 'BULLISH' : rsiVal < 40 ? 'BEARISH' : 'NEUTRAL'} |
+| **Valuation Multiple** | ${fund.peRatio ? `${fund.peRatio}x P/E` : 'Peer Median'} | Industry Historical Norm | ${fund.peRatio && fund.peRatio > 35 ? 'REDUCE' : 'ACCUMULATE'} |
+| **Tactical 1Y Target** | ${targetPrice1Y} ${currency} | ~25% Projected Growth | HIGH CONVICTION |
+| **Capital Defense Floor** | ${stopLoss} ${currency} | Key Structural Support | Strict Risk Trigger |
+
 From a macroeconomic vantage point, current domestic monetary conditions and sector capital expenditure cycles provide a multi-faceted backdrop for ${companyName || ticker}. While broader indices reflect moderate volatility, institutional participation in large-cap equities remains selective, prioritizing companies with robust balance sheets, transparent corporate governance, and expanding operational moats. The overarching framework suggests that current market valuations are actively digesting near-term rate expectations while setting up long-term capital compounding trajectories.
 
 ---
@@ -79,6 +91,8 @@ From a macroeconomic vantage point, current domestic monetary conditions and sec
 - **News Catalyst Screening**: ${info.newsSummary || 'Recent disclosures and financial reporting highlight sustained business execution, corporate strategic clarity, and steady sector adoption.'} The Information Agent identifies positive institutional mentions across national financial media, affirming that market sentiment is anchored by tangible operational developments rather than ephemeral social rumors.
 - **Institutional Accumulation vs Distribution**: Order flow analysis indicates constructive accumulation signatures during consolidated trading ranges, with sell-offs exhibiting diminishing volume profiles indicative of seller exhaustion.
 
+> 💡 **Strategic Institutional Catalyst**: Continuous capital deployment into margin-accretive operational initiatives provides tangible tailwinds for multiple expansion over a 12-24 month investment horizon.
+
 ---
 
 ### 5. Risk Matrix & Devil's Advocate Stress Testing
@@ -98,16 +112,18 @@ A rigorous institutional analysis requires relentless stress-testing against dow
     ]).map((t) => `  - **${t}**`).join('\n')}
 - **Black Swan Worst-Case Scenario**: Under an exogenous liquidity shock or prolonged economic contraction, price action could experience a mean-reversion retest toward foundational 52-week support zones.
 
+> ⚠️ **Downside Risk Warning**: A sustained close below ${stopLoss} ${currency} constitutes a thesis invalidation trigger requiring capital preservation and position de-risking.
+
 ---
 
 ### 6. Strategic Investment Blueprint & Target Matrix
 - **Core Recommendation & Verdict**: **${verdict}**
 - **Actionable Execution Plan**:
-  - **Phased Accumulation Buy Zone**: **${buyZoneLow} - ${buyZoneHigh} ${currency}** (Accumulate systematically during consolidation pullbacks).
-  - **Tactical 1-Year Target Price**: **${targetPrice1Y} ${currency}** (~25% capital appreciation target).
-  - **Strategic 3-Year Target Price**: **${targetPrice3Y} ${currency}** (~65% long-term compounding target).
-  - **Structural Stop-Loss Level**: **${stopLoss} ${currency}** (Hard invalidation floor; strict risk discipline mandatory).
-  - **Risk-to-Reward Ratio**: **1 : 2.5** (Favorable institutional asymmetry).
+  - **Phased Accumulation Buy Zone**: **${buyZoneLow} - ${buyZoneHigh} ${currency}**
+  - **Tactical 1-Year Target Price**: **${targetPrice1Y} ${currency}** (~25% capital appreciation target)
+  - **Strategic 3-Year Target Price**: **${targetPrice3Y} ${currency}** (~65% long-term compounding target)
+  - **Structural Stop-Loss Level**: **${stopLoss} ${currency}** (Strict capital invalidation floor)
+  - **Risk-to-Reward Ratio**: **1 : 2.5** (Favorable institutional asymmetry)
   - **Portfolio Sizing Recommendation**: Allocate 2% to 5% of overall equity portfolio capital, staggered across 3 to 4 tranches to optimize cost basis.
 
 ---

@@ -1,4 +1,4 @@
-import { API_CONFIG } from './apiConfig';
+import { API_CONFIG, DEFAULT_MODEL } from './apiConfig';
 import type { MarketStackEOD, MarketStackDividend, MarketStackSplit, AnalystNews } from './api';
 import { CacheService } from './orchestrator/cache/CacheService';
 
@@ -12,7 +12,7 @@ export interface LLMAnalysis {
   disclaimer?: string;
 }
 
-const NVIDIA_MODEL = "openai/gpt-oss-20b";
+const NVIDIA_MODEL = DEFAULT_MODEL;
 const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
 
 const LLM_TIMEOUT = 300000; // 5 minutes for deep research
@@ -586,7 +586,7 @@ IMPORTANT: The "verdict" field must be exactly one of these three strings: "BULL
   // We will reuse the internal tryLLM approach from getDeepAnalysis.
   // Since tryLLM is scoped inside getDeepAnalysis, we'll duplicate the LLM caller block here for isolation.
   
-  const NVIDIA_MODEL = "openai/gpt-oss-20b";
+  const NVIDIA_MODEL = DEFAULT_MODEL;
   const OPENROUTER_MODEL = "meta-llama/llama-3.1-70b-instruct";
   
   const callLLM = async (url: string, headers: Record<string, string>, body: string, label: string): Promise<LLMAnalysis> => {

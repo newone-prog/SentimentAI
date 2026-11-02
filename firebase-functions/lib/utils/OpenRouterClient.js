@@ -5,7 +5,7 @@ class OpenRouterClient {
     static getApiKey() {
         return process.env.OPENROUTER_KEY || process.env.VITE_OPENROUTER_KEY || "";
     }
-    static model = "openai/gpt-oss-20b";
+    static model = "nvidia/nemotron-3-ultra-550b-a55b";
     static getNvidiaKey() {
         return process.env.NVIDIA_NIM_KEY || process.env.VITE_NVIDIA_NIM_KEY || "";
     }

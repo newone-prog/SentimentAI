@@ -52,7 +52,10 @@ export const AgentChat: React.FC = () => {
   const [pendingTools, setPendingTools] = useState<ToolActivity[]>([]);
   const [streamingContent, setStreamingContent] = useState('');
   const [effort, setEffort] = useState<'default' | 'medium' | 'high'>('default');
-  const [modelId, setModelId] = useState<string>(NEMOTRON_MODELS[0].id);
+  const [modelId, setModelId] = useState<string>(() => {
+    const saved = typeof window !== 'undefined' ? localStorage.getItem('agent_selected_model') : null;
+    return NEMOTRON_MODELS.some(m => m.id === saved) ? (saved as string) : NEMOTRON_MODELS[0].id;
+  });
   const [showEffortMenu, setShowEffortMenu] = useState(false);
   const [showModelMenu, setShowModelMenu] = useState(false);
   const modelMenuRef = useRef<HTMLDivElement>(null);
@@ -299,7 +302,7 @@ export const AgentChat: React.FC = () => {
                   <div className="agent-menu-dropdown model-dropdown">
                     <div className="agent-menu-header">AI Engine</div>
                     {NEMOTRON_MODELS.map(m => (
-                      <button key={m.id} className={`effort-option ${modelId === m.id ? 'active' : ''}`} onClick={() => { setModelId(m.id); setShowModelMenu(false); }}>
+                      <button key={m.id} className={`effort-option ${modelId === m.id ? 'active' : ''}`} onClick={() => { setModelId(m.id); localStorage.setItem('agent_selected_model', m.id); setShowModelMenu(false); }}>
                         <Cpu className="w-4 h-4 text-[#C4A77D] shrink-0" />
                         <div>
                           <span className="effort-opt-label">{m.label}</span>

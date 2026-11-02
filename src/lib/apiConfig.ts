@@ -19,10 +19,11 @@ export const API_CONFIG = {
 export const NEMOTRON_MODEL = "nvidia/nemotron-3-ultra-550b-a55b";
 
 export const NEMOTRON_MODELS = [
-  { id: "nvidia/nemotron-3-ultra-550b-a55b", label: "Nemotron 3 Ultra 550B", shortLabel: "Ultra 550B", desc: "Most capable, best analysis" },
-  { id: "nvidia/nemotron-3-ultra-8b-a55b", label: "Nemotron 3 Ultra 8B", shortLabel: "Ultra 8B", desc: "Fast, efficient responses" },
-  { id: "meta/llama-3.1-70b-instruct", label: "Llama 3.1 70B", shortLabel: "Llama 70B", desc: "Strong general reasoning" },
-  { id: "nvidia/nemotron-3-120b-a55b", label: "Nemotron 3 Super VL 120B", shortLabel: "Super 120B", desc: "Balanced speed & accuracy" },
+  { id: "nvidia/nemotron-3-ultra-550b-a55b", label: "Nemotron 3 Ultra 550B", shortLabel: "Ultra 550B", desc: "Flagship 550B reasoning & analysis" },
+  { id: "nvidia/nemotron-3.5-super-vl-120b-a12b", label: "Nemotron 3.5 Super VL 120B", shortLabel: "Super 120B", desc: "High-capacity balanced model" },
+  { id: "nvidia/nemotron-3.5-lightning-30b-a3b", label: "Nemotron 3.5 Lightning 30B", shortLabel: "Lightning 30B", desc: "Ultra-fast low latency streaming" },
+  { id: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", label: "Nemotron 3 Nano Reasoning", shortLabel: "Nano 30B", desc: "Specialized step-by-step reasoning" },
+  { id: "nvidia/nemotron-3.5-bolt-e4b", label: "Nemotron 3.5 Bolt 4B", shortLabel: "Bolt 4B", desc: "Instant response lightweight engine" },
 ];
 
 export const DEFAULT_MODEL = NEMOTRON_MODELS[0].id;

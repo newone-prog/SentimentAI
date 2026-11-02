@@ -1,9 +1,11 @@
+import { DEFAULT_MODEL } from '../../apiConfig';
+
 export class OpenRouterClient {
   private static getApiKey(): string {
     return import.meta.env.VITE_OPENROUTER_KEY || "";
   }
 
-  private static model = "openai/gpt-oss-20b";
+  private static model = DEFAULT_MODEL;
 
   private static getNvidiaKey(): string {
     return import.meta.env.VITE_NVIDIA_NIM_KEY || "";
