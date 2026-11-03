@@ -12,6 +12,7 @@ import { fetchStockData, fetchNewsAndSentiment, fetchLivePrice, searchMutualFund
 import { Navigation } from './components/Navigation';
 import { TerminalView } from './components/TerminalView';
 import { AgentChat } from './components/AgentChat';
+import { Footer } from './components/Footer';
 import { FloatingResearchReport } from './components/FloatingResearchReport';
 import { type DevilsAdvocateResponse } from './lib/terminalService';
 
@@ -914,39 +915,6 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode; name: s
     return this.props.children;
   }
 }
-
-// Footer
-const Footer = () => (
-  <footer className="footer-creative">
-    <div className="footer-creative-glow" />
-    <div className="max-w-7xl mx-auto px-6 relative z-10">
-      <div className="footer-creative-top">
-        <div className="footer-creative-brand">
-          <div className="flex items-center gap-2 mb-4"><Sparkles className="w-6 h-6 text-[#C4A77D]" /><span className="font-display text-2xl text-white">SentimentAI</span></div>
-          <p className="text-white/40 text-sm max-w-xs leading-relaxed">Decoding market emotion with AI. Real-time sentiment analysis for Indian equity markets.</p>
-        </div>
-        <div className="footer-creative-links">
-          <div><h4 className="footer-creative-heading">Platform</h4><a href="#analysis" className="footer-creative-link">Dashboard</a><a href="#" className="footer-creative-link">Terminal</a><a href="#" className="footer-creative-link">API Docs</a></div>
-          <div><h4 className="footer-creative-heading">Data Sources</h4><a href="#" className="footer-creative-link">Yahoo Finance</a><a href="#" className="footer-creative-link">TradingView</a><a href="#" className="footer-creative-link">MarketStack</a><a href="#" className="footer-creative-link">Indian Stock API</a></div>
-          <div><h4 className="footer-creative-heading">Legal</h4><a href="#" className="footer-creative-link">Privacy Policy</a><a href="#" className="footer-creative-link">Terms of Service</a><a href="#" className="footer-creative-link">Disclaimer</a></div>
-        </div>
-      </div>
-      <div className="footer-creative-divider" />
-      <div className="footer-creative-bottom">
-        <div className="footer-creative-stats">
-          <div className="footer-stat-item"><span className="footer-stat-value">5</span><span className="footer-stat-label">Data Sources</span></div>
-          <div className="footer-stat-dot" />
-          <div className="footer-stat-item"><span className="footer-stat-value">3</span><span className="footer-stat-label">AI Models</span></div>
-          <div className="footer-stat-dot" />
-          <div className="footer-stat-item"><span className="footer-stat-value">NSE/BSE</span><span className="footer-stat-label">Markets</span></div>
-          <div className="footer-stat-dot" />
-          <div className="footer-stat-item"><span className="footer-stat-value">Real-time</span><span className="footer-stat-label">Analysis</span></div>
-        </div>
-        <p className="text-white/25 text-xs font-mono">&copy; 2026 SentimentAI. AI-generated insights. Not financial advice. Invest at your own risk.</p>
-      </div>
-    </div>
-  </footer>
-);
 
 // ─── MAIN APP ───
 function App() {

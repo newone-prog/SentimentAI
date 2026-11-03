@@ -423,6 +423,61 @@ app.post(['/cache/:symbol', '/api/cache/:symbol'], (req: Request, res: Response)
   return res.json({ success: true, message: 'Cached successfully' });
 });
 
+// ── Contact Form Endpoint (Sends message info to devanshmehrotra2190@gmail.com)
+app.post(['/contact', '/api/contact'], async (req: Request, res: Response) => {
+  try {
+    const { name, email, subject, message } = req.body || {};
+    if (!name || !message) {
+      return res.status(400).json({ error: 'Name and message are required fields.' });
+    }
+
+    console.log(`[Contact Form Received] From: ${name} <${email || 'no-email'}> | Subject: ${subject}`);
+    console.log(`[Message Content]: ${message}`);
+
+    // If Resend API key is available, dispatch email via Resend
+    const resendKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
+    let emailDispatched = false;
+    if (resendKey) {
+      try {
+        const { Resend } = require('resend');
+        const resend = new Resend(resendKey);
+        await resend.emails.send({
+          from: 'SentimentAI Contact <onboarding@resend.dev>',
+          to: 'devanshmehrotra2190@gmail.com',
+          replyTo: email || undefined,
+          subject: `[SentimentAI Contact] ${subject || 'New Message'} from ${name}`,
+          html: `
+            <div style="font-family: sans-serif; padding: 24px; color: #111; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 12px;">
+              <h2 style="color: #2563eb; margin-top: 0;">New Message from SentimentAI Website</h2>
+              <p><strong>Sender Name:</strong> ${name}</p>
+              <p><strong>Sender Email:</strong> ${email || 'Not provided'}</p>
+              <p><strong>Subject:</strong> ${subject || 'General Inquiry'}</p>
+              <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+              <h3 style="color: #374151;">Message:</h3>
+              <p style="white-space: pre-wrap; background: #f9fafb; padding: 16px; border-radius: 8px; border: 1px solid #e5e7eb;">${message}</p>
+              <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+              <p style="font-size: 12px; color: #9ca3af;">Delivered to devanshmehrotra2190@gmail.com from SentimentAI Web Portal.</p>
+            </div>
+          `
+        });
+        emailDispatched = true;
+      } catch (emailErr: any) {
+        console.warn('[Resend Email Dispatch Warning]:', emailErr.message);
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: 'Message delivered to Devansh Mehrotra (devanshmehrotra2190@gmail.com).',
+      dispatched: emailDispatched,
+      recipient: 'devanshmehrotra2190@gmail.com'
+    });
+  } catch (err: any) {
+    console.error('[Contact Handler Error]:', err.message);
+    return res.status(500).json({ error: 'Failed to process message', details: err.message });
+  }
+});
+
 // ── Health Check
 app.get(['/health', '/api/health'], (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
