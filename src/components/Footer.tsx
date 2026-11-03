@@ -1,117 +1,16 @@
 import React, { useState } from 'react';
-import { 
-  ArrowUpRight, 
-  ExternalLink, 
-  Mail, 
-  ShieldCheck, 
-  Globe2, 
-  ChevronUp,
-  X
+import {
+  ArrowUpRight,
+  ExternalLink,
+  Mail,
+  ShieldCheck,
+  Globe2,
+  ChevronUp
 } from 'lucide-react';
 import { ContactModal } from './ContactModal';
+import { SourcesModal } from './SourcesModal';
 
-// ── Complete Data Sources Directory for Maximum Transparency ──
-interface DataSourceItem {
-  name: string;
-  category: 'Equities & Derivatives' | 'Mutual Funds' | 'News & Sentiment' | 'AI & Execution';
-  url: string;
-  role: string;
-  status: string;
-}
 
-const DATA_SOURCES: DataSourceItem[] = [
-  {
-    name: 'NSE India',
-    category: 'Equities & Derivatives',
-    url: 'https://www.nseindia.com',
-    role: 'National Stock Exchange of India: Equities, NIFTY Indices, and Derivatives.',
-    status: 'Official Exchange'
-  },
-  {
-    name: 'BSE India',
-    category: 'Equities & Derivatives',
-    url: 'https://www.bseindia.com',
-    role: 'Bombay Stock Exchange: SENSEX, Corporate Actions, and Bhavcopy historicals.',
-    status: 'Official Exchange'
-  },
-  {
-    name: 'Yahoo Finance',
-    category: 'Equities & Derivatives',
-    url: 'https://finance.yahoo.com',
-    role: 'Real-time quotes, multi-year historical candles (1D, 1W), and global commodities.',
-    status: 'Real-time Feed'
-  },
-  {
-    name: 'IndianAPI',
-    category: 'Equities & Derivatives',
-    url: 'https://stock.indianapi.in',
-    role: 'Live NSE/BSE options chains, strike open interest (OI), and corporate filings.',
-    status: 'Live API'
-  },
-  {
-    name: 'Marketstack',
-    category: 'Equities & Derivatives',
-    url: 'https://marketstack.com',
-    role: 'End-of-day market tick histories and institutional closing price feeds.',
-    status: 'Live API'
-  },
-  {
-    name: 'MF API (AMFI)',
-    category: 'Mutual Funds',
-    url: 'https://www.mfapi.in',
-    role: 'All 38,000+ Indian mutual fund schemes: historical NAV, 1Y returns, and 3Y CAGRs.',
-    status: 'Live API'
-  },
-  {
-    name: 'Google News',
-    category: 'News & Sentiment',
-    url: 'https://news.google.com',
-    role: 'Real-time Indian financial coverage, corporate headlines, and macroeconomic feeds.',
-    status: 'Real-time Feed'
-  },
-  {
-    name: 'GNews API',
-    category: 'News & Sentiment',
-    url: 'https://gnews.io',
-    role: 'Curated financial news aggregation with semantic sentiment scoring.',
-    status: 'Live API'
-  },
-  {
-    name: 'MediaStack',
-    category: 'News & Sentiment',
-    url: 'https://mediastack.com',
-    role: 'Global economic press wire aggregation and international market sentiment.',
-    status: 'Live API'
-  },
-  {
-    name: 'Tavily AI Search',
-    category: 'News & Sentiment',
-    url: 'https://tavily.com',
-    role: 'Autonomous real-time search engine for AI agents and market investigations.',
-    status: 'Live API'
-  },
-  {
-    name: 'TradingView',
-    category: 'AI & Execution',
-    url: 'https://www.tradingview.com',
-    role: 'Technical oscillators (RSI, ADX, MACD, Bollinger Bands) and consensus ratings.',
-    status: 'Real-time Feed'
-  },
-  {
-    name: 'NVIDIA NIM',
-    category: 'AI & Execution',
-    url: 'https://build.nvidia.com',
-    role: 'Nemotron 3 Ultra 550B autonomous reasoning, strategy backtesting, and synthesis.',
-    status: 'Live API'
-  },
-  {
-    name: 'Pyodide',
-    category: 'AI & Execution',
-    url: 'https://pyodide.org',
-    role: 'In-browser WebAssembly Python quantitative analytics & Monte Carlo engine.',
-    status: 'WASM Runtime'
-  }
-];
 
 export const Footer: React.FC = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
@@ -136,7 +35,7 @@ export const Footer: React.FC = () => {
           <div className="absolute inset-0 bg-[#000000]" />
 
           {/* 2. Luminous Gold / Amber Aurora Wave (Left & Center) */}
-          <div 
+          <div
             className="absolute -top-[12%] -left-[10%] w-[90vw] md:w-[75vw] h-[65vh] rounded-[100%] opacity-90 blur-[70px] md:blur-[110px]"
             style={{
               background: 'radial-gradient(ellipse at 40% 40%, #E5C158 0%, #D4AF37 25%, #C4A77D 50%, #8A6422 75%, transparent 100%)'
@@ -144,7 +43,7 @@ export const Footer: React.FC = () => {
           />
 
           {/* 3. Radiant Pure White / Champagne Spotlight (Top-Right - as in AIUC reference) */}
-          <div 
+          <div
             className="absolute -top-[15%] right-[-5%] w-[70vw] md:w-[55vw] h-[60vh] rounded-[100%] opacity-85 blur-[60px] md:blur-[95px]"
             style={{
               background: 'radial-gradient(ellipse at 60% 35%, #FFFFFF 0%, #FFF6E5 30%, rgba(229, 193, 88, 0.6) 65%, transparent 100%)'
@@ -152,7 +51,7 @@ export const Footer: React.FC = () => {
           />
 
           {/* 4. Warm Golden Luminous Corona Bridge */}
-          <div 
+          <div
             className="absolute top-0 left-[25%] w-[65vw] md:w-[50vw] h-[45vh] rounded-[100%] opacity-80 blur-[80px] md:blur-[120px]"
             style={{
               background: 'radial-gradient(ellipse at 50% 30%, #FFDF85 0%, #D4AF37 40%, rgba(196, 167, 125, 0.4) 70%, transparent 100%)'
@@ -160,7 +59,7 @@ export const Footer: React.FC = () => {
           />
 
           {/* 5. Natural Atmospheric Falloff into Deep Black at Bottom */}
-          <div 
+          <div
             className="absolute inset-0"
             style={{
               background: 'linear-gradient(180deg, transparent 0%, transparent 28%, rgba(0,0,0,0.35) 48%, rgba(0,0,0,0.85) 68%, #000000 85%, #000000 100%)'
@@ -230,7 +129,7 @@ export const Footer: React.FC = () => {
             <div className="lg:col-span-8">
               {/* Giant Serif Display Title matching AIUC © */}
               <div className="relative inline-block select-none">
-                <h1 
+                <h1
                   className="font-serif text-white tracking-tight leading-none drop-shadow-[0_20px_45px_rgba(0,0,0,0.9)]"
                   style={{
                     fontSize: 'clamp(3.8rem, 11vw, 8.8rem)',
@@ -239,12 +138,6 @@ export const Footer: React.FC = () => {
                   }}
                 >
                   SENTIMENT<span className="text-[#C4A77D]">AI</span>
-                  <sup 
-                    className="text-white/80 font-sans ml-1 text-2xl md:text-5xl align-super inline-block -translate-y-4"
-                    style={{ fontSize: '0.35em' }}
-                  >
-                    ©
-                  </sup>
                 </h1>
               </div>
 
@@ -256,23 +149,6 @@ export const Footer: React.FC = () => {
                 <span>38,000+ MUTUAL FUNDS</span>
                 <span className="text-[#C4A77D]/60">•</span>
                 <span>QUANTITATIVE SENTIMENT</span>
-              </div>
-            </div>
-
-            {/* Circular Insignia Protocol Seal (AIUC Style) */}
-            <div className="lg:col-span-4 flex items-center lg:justify-end">
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-black/60 border border-white/[0.14] backdrop-blur-2xl max-w-sm shadow-2xl">
-                <div className="w-12 h-12 rounded-full border border-[#C4A77D]/60 bg-[#C4A77D]/15 flex items-center justify-center shrink-0 text-[#C4A77D]">
-                  <Globe2 className="w-6 h-6 animate-[spin_24s_linear_infinite]" />
-                </div>
-                <div>
-                  <div className="text-xs font-mono uppercase tracking-widest text-white/95 font-semibold">
-                    SentimentAI Protocol
-                  </div>
-                  <div className="text-[11px] text-white/55 leading-relaxed mt-0.5 font-sans">
-                    Artificial Intelligence Underwriting & Quantitative Sentiment Company
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -361,86 +237,10 @@ export const Footer: React.FC = () => {
       </footer>
 
       {/* ── SOURCES TRANSPARENCY MODAL (Shows all 13 sources in depth) ── */}
-      {isSourcesModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-fade-in">
-          <div 
-            className="relative w-full max-w-3xl max-h-[85vh] bg-[#070707] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col text-white"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Top gold bar */}
-            <div className="h-1 bg-gradient-to-r from-transparent via-[#C4A77D] to-transparent shrink-0" />
-
-            {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-white/[0.08] shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#C4A77D]/10 border border-[#C4A77D]/30 flex items-center justify-center text-[#C4A77D]">
-                  <ShieldCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-display text-lg font-semibold tracking-wide text-white">
-                    Data Sources & Transparency Directory
-                  </h3>
-                  <p className="text-xs text-white/50 font-mono">
-                    All 13 verified direct data sources, exchanges & execution layers
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsSourcesModalOpen(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Content List */}
-            <div className="p-6 overflow-y-auto space-y-3 custom-scrollbar">
-              {DATA_SOURCES.map((source) => (
-                <div
-                  key={source.name}
-                  className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-[#C4A77D]/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-display font-semibold text-white text-sm">
-                        {source.name}
-                      </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.05] text-[#C4A77D] border border-[#C4A77D]/20">
-                        {source.category}
-                      </span>
-                    </div>
-                    <p className="text-xs text-white/50 leading-relaxed max-w-xl">
-                      {source.role}
-                    </p>
-                  </div>
-
-                  <a
-                    href={source.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-[#C4A77D]/20 text-[#C4A77D] hover:text-white border border-white/[0.08] hover:border-[#C4A77D]/40 text-xs font-mono transition-all shrink-0 self-start sm:self-center"
-                  >
-                    <span>Visit Source</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              ))}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 border-t border-white/[0.08] bg-black/40 flex items-center justify-between text-xs font-mono text-white/40 shrink-0">
-              <span>Verified Data Integrity Protocol</span>
-              <button
-                type="button"
-                onClick={() => setIsSourcesModalOpen(false)}
-                className="px-4 py-1.5 rounded-lg bg-[#C4A77D] text-black font-semibold text-xs hover:bg-[#d8c5a8] transition-all"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <SourcesModal
+        isOpen={isSourcesModalOpen}
+        onClose={() => setIsSourcesModalOpen(false)}
+      />
 
       {/* Contact Us Modal Window */}
       <ContactModal
