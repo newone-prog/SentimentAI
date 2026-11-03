@@ -87,8 +87,18 @@ You can render interactive UI components directly in the chat by using execute_c
 - **timeline**: Timeline of events
 - **html**: Custom HTML (sanitized)
 
-### Python Helpers (available in execute_code):
+### Python Helpers & Financial Indicators (Pre-installed in execute_code):
 \`\`\`python
+# Built-in Financial Indicators (DO NOT re-implement or use fragile nested lambdas):
+rsi(series, period=14)                     # Calculates RSI (accepts pandas Series or list)
+sma(series, period=20)                     # Simple Moving Average
+ema(series, period=20)                     # Exponential Moving Average
+macd(series, fast=12, slow=26, signal=9)   # Returns dict: {'macd', 'signal', 'hist'}
+bollinger_bands(series, period=20, num_std=2) # Returns dict: {'mid', 'upper', 'lower'}
+sharpe_ratio(returns, risk_free_rate=0.06) # Annualized Sharpe Ratio
+max_drawdown(equity_curve)                 # Max Drawdown %
+
+# UI Components (emit directly):
 sys.ui_table(title, data, columns=None, sortable=True, filterable=True, pageSize=10)
 sys.ui_chart(title, data, chart_type='line', x_key=None, y_keys=None, color_key=None, height=300)
 sys.ui_metric_cards(title, metrics)
@@ -97,6 +107,10 @@ sys.ui_timeline(title, events)
 sys.ui_html(title, html)
 sys.emit_ui(action)  # emit any UI action
 \`\`\`
+**CODE EXECUTION RULES**:
+- Always write clean, multi-line standard Python.
+- Never write nested lambda expressions for indicators; use the built-in rsi(df['Close']), sma(), ema() functions.
+- Always check that all parentheses (), brackets [], and braces {} are strictly balanced and closed.
 
 ### JavaScript Helpers (available in execute_code):
 \`\`\`javascript

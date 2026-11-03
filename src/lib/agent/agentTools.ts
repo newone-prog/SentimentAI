@@ -85,20 +85,29 @@ export const normalizeApexDomain = (rawDomain: string): string => {
 
 const MFAPI_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%23059669'/%3E%3Cpath d='M7 16l4-4 3 3 5-6' stroke='white' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E`;
 
+const INDIANAPI_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%23ea580c'/%3E%3Ctext x='12' y='17' font-size='14' font-weight='bold' fill='white' text-anchor='middle' font-family='sans-serif'%3E₹%3C/text%3E%3C/svg%3E`;
+
+const MARKETSTACK_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%232563eb'/%3E%3Cpath d='M6 18h12M6 14h12M6 10h12M6 6h12' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E`;
+
+const MEDIASTACK_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%237c3aed'/%3E%3Cpath d='M7 8h10M7 12h10M7 16h6' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E`;
+
+const PYODIDE_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%233776ab'/%3E%3Cpath d='M7 8h5a2 2 0 0 1 2 2v2H9a2 2 0 0 0-2 2v2h2v-2h5a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H7v1z' fill='%23ffd343'/%3E%3C/svg%3E`;
+
 const KNOWN_FAVICONS: Record<string, string> = {
   'mfapi.in': MFAPI_SVG_ICON,
+  'indianapi.in': INDIANAPI_SVG_ICON,
+  'stock.indianapi.in': INDIANAPI_SVG_ICON,
+  'marketstack.com': MARKETSTACK_SVG_ICON,
+  'mediastack.com': MEDIASTACK_SVG_ICON,
+  'pyodide.org': PYODIDE_SVG_ICON,
   'tradingview.com': 'https://www.tradingview.com/favicon.ico',
   'yahoo.com': 'https://s.yimg.com/rz/l/favicon.ico',
   'tavily.com': 'https://tavily.com/favicon.ico',
   'brave.com': 'https://brave.com/static-assets/images/brave-favicon.png',
-  'indianapi.in': 'https://stock.indianapi.in/favicon.ico',
   'gnews.io': 'https://gnews.io/favicon.ico',
-  'mediastack.com': 'https://mediastack.com/favicon.ico',
-  'marketstack.com': 'http://marketstack.com/favicon.ico',
   'jina.ai': 'https://jina.ai/favicon.ico',
   'r.jina.ai': 'https://jina.ai/favicon.ico',
   'news.google.com': 'https://news.google.com/favicon.ico',
-  'pyodide.org': 'https://pyodide.org/favicon.ico',
   'duckduckgo.com': 'https://duckduckgo.com/favicon.ico'
 };
 
@@ -1029,9 +1038,9 @@ export const executeCode = async (code: string, language: 'python' | 'javascript
       pyodide.setStdout({ batched: captureStdout });
       pyodide.setStderr({ batched: captureStderr });
 
-      // Inject UI action helpers into Python namespace safely
+      // Inject UI action helpers and standard financial indicators into Python namespace safely
       await pyodide.runPythonAsync(`
-import json, sys
+import json, sys, math
 try:
     import numpy as np
 except Exception:
@@ -1041,6 +1050,119 @@ try:
 except Exception:
     pass
 from datetime import datetime, timedelta
+
+# ── Financial Calculation Functions (Battle-tested built-ins)
+def rsi(series, period=14):
+    """Calculate Relative Strength Index (RSI). Accepts pandas Series or list."""
+    try:
+        if hasattr(series, 'diff'):
+            delta = series.diff()
+            gain = delta.clip(lower=0)
+            loss = -delta.clip(upper=0)
+            avg_gain = gain.rolling(window=period, min_periods=period).mean()
+            avg_loss = loss.rolling(window=period, min_periods=period).mean()
+            rs = avg_gain / avg_loss.replace(0, 1e-9)
+            return 100.0 - (100.0 / (1.0 + rs))
+    except Exception:
+        pass
+    vals = list(series)
+    res = [None] * len(vals)
+    if len(vals) <= period:
+        return res
+    gains, losses = [], []
+    for i in range(1, len(vals)):
+        chg = vals[i] - vals[i-1]
+        gains.append(max(0.0, chg))
+        losses.append(max(0.0, -chg))
+    avg_g = sum(gains[:period]) / period
+    avg_l = sum(losses[:period]) / period
+    res[period] = 100.0 if avg_l == 0 else 100.0 - (100.0 / (1.0 + avg_g / avg_l))
+    for i in range(period, len(gains)):
+        avg_g = (avg_g * (period - 1) + gains[i]) / period
+        avg_l = (avg_l * (period - 1) + losses[i]) / period
+        res[i+1] = 100.0 if avg_l == 0 else 100.0 - (100.0 / (1.0 + avg_g / avg_l))
+    return res
+
+def sma(series, period=20):
+    """Simple Moving Average."""
+    if hasattr(series, 'rolling'):
+        return series.rolling(window=period, min_periods=period).mean()
+    vals = list(series)
+    res = [None] * len(vals)
+    for i in range(period - 1, len(vals)):
+        res[i] = sum(vals[i - period + 1 : i + 1]) / period
+    return res
+
+def ema(series, period=20):
+    """Exponential Moving Average."""
+    if hasattr(series, 'ewm'):
+        return series.ewm(span=period, adjust=False).mean()
+    vals = list(series)
+    if not vals:
+        return []
+    alpha = 2.0 / (period + 1)
+    res = [vals[0]]
+    for x in vals[1:]:
+        res.append(alpha * x + (1.0 - alpha) * res[-1])
+    return res
+
+def macd(series, fast=12, slow=26, signal=9):
+    """MACD Line, Signal Line, Histogram."""
+    f = ema(series, fast)
+    s = ema(series, slow)
+    if hasattr(series, 'ewm'):
+        line = f - s
+        sig = line.ewm(span=signal, adjust=False).mean()
+        hist = line - sig
+        return {'macd': line, 'signal': sig, 'hist': hist}
+    line = [a - b for a, b in zip(f, s)]
+    sig = ema(line, signal)
+    hist = [a - b for a, b in zip(line, sig)]
+    return {'macd': line, 'signal': sig, 'hist': hist}
+
+def bollinger_bands(series, period=20, num_std=2):
+    """Bollinger Bands (mid, upper, lower)."""
+    mid = sma(series, period)
+    if hasattr(series, 'rolling'):
+        std = series.rolling(window=period, min_periods=period).std()
+        return {'mid': mid, 'upper': mid + (std * num_std), 'lower': mid - (std * num_std)}
+    return {'mid': mid, 'upper': mid, 'lower': mid}
+
+def sharpe_ratio(returns, risk_free_rate=0.06):
+    """Annualized Sharpe Ratio."""
+    vals = [r for r in returns if r is not None and not (isinstance(r, float) and math.isnan(r))]
+    if len(vals) < 2:
+        return 0.0
+    mean_r = sum(vals) / len(vals)
+    variance = sum((x - mean_r) ** 2 for x in vals) / (len(vals) - 1)
+    std_r = math.sqrt(variance)
+    if std_r == 0:
+        return 0.0
+    daily_rf = (1.0 + risk_free_rate) ** (1.0 / 252.0) - 1.0
+    return float(((mean_r - daily_rf) / std_r) * math.sqrt(252))
+
+def max_drawdown(equity_curve):
+    """Max Drawdown % and Peak."""
+    vals = [e for e in equity_curve if e is not None and not (isinstance(e, float) and math.isnan(e))]
+    if not vals:
+        return 0.0
+    peak = vals[0]
+    mdd = 0.0
+    for v in vals:
+        if v > peak:
+            peak = v
+        dd = (peak - v) / peak if peak > 0 else 0.0
+        if dd > mdd:
+            mdd = dd
+    return float(mdd * 100.0)
+
+# Export financial functions to builtins
+import builtins
+for fn in [rsi, sma, ema, macd, bollinger_bands, sharpe_ratio, max_drawdown]:
+    setattr(builtins, fn.__name__, fn)
+    globals()[fn.__name__] = fn
+builtins.compute_rsi = rsi
+globals()['compute_rsi'] = rsi
 
 def ui_table(title, data, columns=None, sortable=True, filterable=True, pageSize=10):
     """Create a sortable, filterable table UI action."""
@@ -1107,7 +1229,40 @@ sys.ui_html = ui_html
 sys.emit_ui = emit_ui
       `);
 
-      await pyodide.runPythonAsync(code);
+      // Robust execution with automatic syntax error recovery
+      const repairPythonSyntax = (raw: string): string => {
+        let repaired = raw;
+        // Fix unclosed parenthesis on single-line statements / lambda definitions
+        const lines = repaired.split('\n');
+        const fixedLines = lines.map(line => {
+          let openP = 0, openB = 0, openC = 0;
+          for (const ch of line) {
+            if (ch === '(') openP++;
+            if (ch === ')') openP--;
+            if (ch === '[') openB++;
+            if (ch === ']') openB--;
+            if (ch === '{') openC++;
+            if (ch === '}') openC--;
+          }
+          let l = line;
+          if (openP > 0) l += ')'.repeat(openP);
+          if (openB > 0) l += ']'.repeat(openB);
+          if (openC > 0) l += '}'.repeat(openC);
+          return l;
+        });
+        return fixedLines.join('\n');
+      };
+
+      try {
+        await pyodide.runPythonAsync(code);
+      } catch (runErr: any) {
+        if (runErr.message && runErr.message.includes("was never closed")) {
+          const repairedCode = repairPythonSyntax(code);
+          await pyodide.runPythonAsync(repairedCode);
+        } else {
+          throw runErr;
+        }
+      }
 
       // Extract UI actions from Python namespace
       const pyActions = pyodide.runPython(`

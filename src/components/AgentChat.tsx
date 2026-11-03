@@ -34,13 +34,30 @@ const SUGGESTIONS = [
 
 const MFAPI_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%23059669'/%3E%3Cpath d='M7 16l4-4 3 3 5-6' stroke='white' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E`;
 
+const INDIANAPI_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%23ea580c'/%3E%3Ctext x='12' y='17' font-size='14' font-weight='bold' fill='white' text-anchor='middle' font-family='sans-serif'%3E₹%3C/text%3E%3C/svg%3E`;
+
+const MARKETSTACK_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%232563eb'/%3E%3Cpath d='M6 18h12M6 14h12M6 10h12M6 6h12' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E`;
+
+const MEDIASTACK_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%237c3aed'/%3E%3Cpath d='M7 8h10M7 12h10M7 16h6' stroke='white' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E`;
+
+const PYODIDE_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%233776ab'/%3E%3Cpath d='M7 8h5a2 2 0 0 1 2 2v2H9a2 2 0 0 0-2 2v2h2v-2h5a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2H7v1z' fill='%23ffd343'/%3E%3C/svg%3E`;
+
 const sanitizeSourceRef = (src: SourceRef): SourceRef => {
   let domain = src.domain || 'tradingview.com';
   if (domain.includes('scanner.tradingview.com')) domain = 'tradingview.com';
   let favicon = src.favicon;
+
   if (domain === 'mfapi.in' || (favicon && favicon.includes('mfapi.in'))) {
     favicon = MFAPI_SVG_ICON;
-  } else if (!favicon || favicon.includes('scanner.tradingview.com') || favicon.includes('gstatic.com') || favicon.includes('domain=javascript')) {
+  } else if (domain === 'indianapi.in' || domain === 'stock.indianapi.in' || (favicon && favicon.includes('indianapi.in'))) {
+    favicon = INDIANAPI_SVG_ICON;
+  } else if (domain === 'marketstack.com' || (favicon && favicon.includes('marketstack.com'))) {
+    favicon = MARKETSTACK_SVG_ICON;
+  } else if (domain === 'mediastack.com' || (favicon && favicon.includes('mediastack.com'))) {
+    favicon = MEDIASTACK_SVG_ICON;
+  } else if (domain === 'pyodide.org' || (favicon && favicon.includes('pyodide.org'))) {
+    favicon = PYODIDE_SVG_ICON;
+  } else if (!favicon || favicon.startsWith('http://') || favicon.includes('scanner.tradingview.com') || favicon.includes('gstatic.com') || favicon.includes('domain=javascript')) {
     favicon = 'https://icons.duckduckgo.com/ip3/tradingview.com.ico';
   }
   return { ...src, domain, favicon };
