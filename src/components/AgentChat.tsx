@@ -32,11 +32,15 @@ const SUGGESTIONS = [
   'Run custom momentum strategy on TCS'
 ];
 
+const MFAPI_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%23059669'/%3E%3Cpath d='M7 16l4-4 3 3 5-6' stroke='white' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E`;
+
 const sanitizeSourceRef = (src: SourceRef): SourceRef => {
   let domain = src.domain || 'tradingview.com';
   if (domain.includes('scanner.tradingview.com')) domain = 'tradingview.com';
   let favicon = src.favicon;
-  if (!favicon || favicon.includes('scanner.tradingview.com') || favicon.includes('gstatic.com') || favicon.includes('domain=javascript')) {
+  if (domain === 'mfapi.in' || (favicon && favicon.includes('mfapi.in'))) {
+    favicon = MFAPI_SVG_ICON;
+  } else if (!favicon || favicon.includes('scanner.tradingview.com') || favicon.includes('gstatic.com') || favicon.includes('domain=javascript')) {
     favicon = 'https://icons.duckduckgo.com/ip3/tradingview.com.ico';
   }
   return { ...src, domain, favicon };

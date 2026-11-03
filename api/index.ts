@@ -38,6 +38,8 @@ const setInCache = (key: string, data: any, ttlSeconds: number) => {
 const NVIDIA_NIM_KEY = process.env.NVIDIA_NIM_KEY || process.env.VITE_NVIDIA_NIM_KEY || '';
 const OPENROUTER_KEY = process.env.OPENROUTER_KEY || process.env.VITE_OPENROUTER_KEY || '';
 const INDIANAPI_KEY = process.env.INDIANAPI_KEY || process.env.VITE_INDIANAPI_KEY || '';
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY || process.env.VITE_TAVILY_API_KEY || '';
+const BRAVE_API_KEY = process.env.BRAVE_API_KEY || process.env.VITE_BRAVE_API_KEY || '';
 
 // ── Generic Reverse Proxy Handler Factory
 const createProxyHandler = (
@@ -144,10 +146,128 @@ app.use(['/tradingview', '/api/tradingview'], createProxyHandler('https://scanne
 app.use(['/googlenews', '/api/googlenews'], createProxyHandler('https://news.google.com', 'googlenews'));
 app.use(['/jina', '/api/jina'], createProxyHandler('https://r.jina.ai', 'jina'));
 app.use(['/ddg', '/api/ddg'], createProxyHandler('https://html.duckduckgo.com', 'ddg'));
+// ── Smart Mutual Fund Search Handler (Handles abbreviations like "Pru", "PPFAS", "Smallcap", etc.)
+app.get(['/mfapi/mf/search', '/api/mfapi/mf/search'], async (req: Request, res: Response) => {
+  const query = (req.query.q as string || '').trim();
+  if (!query) return res.json([]);
+
+  try {
+    // 1. Try upstream mfapi direct search first
+    const directRes = await axios.get(`https://api.mfapi.in/mf/search?q=${encodeURIComponent(query)}`, {
+      timeout: 6000,
+      validateStatus: () => true
+    });
+    if (directRes.status === 200 && Array.isArray(directRes.data) && directRes.data.length > 0) {
+      return res.json(directRes.data);
+    }
+
+    // 2. Fallback to smart in-memory search against master schemes index
+    let allSchemes = getFromCache('all_mf_schemes');
+    if (!allSchemes) {
+      const allRes = await axios.get('https://api.mfapi.in/mf', { timeout: 12000, validateStatus: () => true });
+      if (allRes.status === 200 && Array.isArray(allRes.data)) {
+        allSchemes = allRes.data;
+        setInCache('all_mf_schemes', allSchemes, 86400); // Cache for 24h
+      }
+    }
+
+    if (Array.isArray(allSchemes) && allSchemes.length > 0) {
+      const norm = query.toLowerCase()
+        .replace(/\bpru\b/g, 'prudential')
+        .replace(/\bppfas\b/g, 'parag parikh')
+        .replace(/\babsl\b/g, 'aditya birla')
+        .replace(/\bbirla\b/g, 'aditya birla')
+        .replace(/\bmosl\b/g, 'motilal oswal')
+        .replace(/\bnippon\b/g, 'nippon india')
+        .replace(/\bidfc\b/g, 'bandhan')
+        .replace(/\bbest\b/g, '')
+        .replace(/\btop\b/g, '')
+        .replace(/\bmutual\b/g, '')
+        .replace(/\bfunds?\b/g, '')
+        .trim();
+
+      const hasSmallCap = norm.includes('small cap') || norm.includes('smallcap');
+      const hasMidCap = norm.includes('mid cap') || norm.includes('midcap');
+      const hasFlexiCap = norm.includes('flexi cap') || norm.includes('flexicap');
+      const hasLargeCap = norm.includes('large cap') || norm.includes('largecap');
+
+      const keywords = norm.split(/\s+/).filter(k => k.length > 2);
+
+      const matches = (allSchemes as any[]).filter(s => {
+        const name = (s.schemeName || '').toLowerCase();
+        if (hasSmallCap && !(name.includes('small cap') || name.includes('smallcap'))) return false;
+        if (hasMidCap && !(name.includes('mid cap') || name.includes('midcap'))) return false;
+        if (hasFlexiCap && !(name.includes('flexi cap') || name.includes('flexicap'))) return false;
+        if (hasLargeCap && !(name.includes('large cap') || name.includes('largecap'))) return false;
+
+        return keywords.every(kw => {
+          if (kw === 'small' || kw === 'cap' || kw === 'smallcap') return true;
+          if (kw === 'mid' || kw === 'midcap') return true;
+          if (kw === 'flexi' || kw === 'flexicap') return true;
+          return name.includes(kw);
+        });
+      });
+
+      // Prioritize Direct Growth schemes
+      matches.sort((a, b) => {
+        const aDirect = /direct/i.test(a.schemeName) && /growth/i.test(a.schemeName) ? 2 : /growth/i.test(a.schemeName) ? 1 : 0;
+        const bDirect = /direct/i.test(b.schemeName) && /growth/i.test(b.schemeName) ? 2 : /growth/i.test(b.schemeName) ? 1 : 0;
+        return bDirect - aDirect;
+      });
+
+      return res.json(matches.slice(0, 20));
+    }
+
+    return res.json([]);
+  } catch (err: any) {
+    console.error('[MF Search Proxy Error]:', err.message);
+    return res.json([]);
+  }
+});
+
 app.use(['/mfapi', '/api/mfapi'], createProxyHandler('https://api.mfapi.in', 'mfapi'));
 app.use(['/alphavantage', '/api/alphavantage'], createProxyHandler('https://www.alphavantage.co', 'alphavantage'));
 app.use(['/fmp', '/api/fmp'], createProxyHandler('https://financialmodelingprep.com', 'fmp'));
-app.use(['/tavily', '/api/tavily'], createProxyHandler('https://api.tavily.com', 'tavily'));
+
+// ── Dedicated Tavily Search Proxy (injects server API key if missing)
+app.use(['/tavily', '/api/tavily'], async (req: Request, res: Response) => {
+  try {
+    const rawAuth = req.headers.authorization;
+    const clientKey = (rawAuth && rawAuth !== 'Bearer ' && rawAuth !== 'Bearer undefined')
+      ? rawAuth.replace(/^Bearer\s+/i, '')
+      : (req.headers['x-api-key'] as string);
+    const bodyKey = req.body && typeof req.body === 'object' ? req.body.api_key : undefined;
+    const effectiveKey = clientKey || bodyKey || TAVILY_API_KEY;
+
+    if (!effectiveKey) {
+      return res.status(401).json({ error: 'Tavily API key not configured. Please set TAVILY_API_KEY or VITE_TAVILY_API_KEY.' });
+    }
+
+    let subPath = req.url || '';
+    subPath = subPath.replace(/^(\/api)?\/tavily/i, '');
+    if (!subPath.startsWith('/')) subPath = '/' + subPath;
+
+    const payload = typeof req.body === 'object' ? { ...req.body, api_key: effectiveKey } : { api_key: effectiveKey };
+
+    const response = await axios({
+      method: req.method,
+      url: `https://api.tavily.com${subPath}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${effectiveKey}`,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      },
+      data: payload,
+      validateStatus: () => true
+    });
+
+    return res.status(response.status).json(response.data);
+  } catch (err: any) {
+    console.error('[Tavily Proxy Error]:', err.message);
+    return res.status(502).json({ error: 'Tavily proxy failed', details: err.message });
+  }
+});
+
 app.all(['/proxy', '/api/proxy'], genericProxyHandler);
 
 // ── LLM Direct Secure Proxies (injects server API keys automatically if client doesn't provide them)

@@ -83,10 +83,32 @@ export const normalizeApexDomain = (rawDomain: string): string => {
   return clean;
 };
 
+const MFAPI_SVG_ICON = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' width='24' height='24'%3E%3Crect width='24' height='24' rx='4' fill='%23059669'/%3E%3Cpath d='M7 16l4-4 3 3 5-6' stroke='white' stroke-width='2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E`;
+
+const KNOWN_FAVICONS: Record<string, string> = {
+  'mfapi.in': MFAPI_SVG_ICON,
+  'tradingview.com': 'https://www.tradingview.com/favicon.ico',
+  'yahoo.com': 'https://s.yimg.com/rz/l/favicon.ico',
+  'tavily.com': 'https://tavily.com/favicon.ico',
+  'brave.com': 'https://brave.com/static-assets/images/brave-favicon.png',
+  'indianapi.in': 'https://stock.indianapi.in/favicon.ico',
+  'gnews.io': 'https://gnews.io/favicon.ico',
+  'mediastack.com': 'https://mediastack.com/favicon.ico',
+  'marketstack.com': 'http://marketstack.com/favicon.ico',
+  'jina.ai': 'https://jina.ai/favicon.ico',
+  'r.jina.ai': 'https://jina.ai/favicon.ico',
+  'news.google.com': 'https://news.google.com/favicon.ico',
+  'pyodide.org': 'https://pyodide.org/favicon.ico',
+  'duckduckgo.com': 'https://duckduckgo.com/favicon.ico'
+};
+
 export const getFavicon = (domain: string): string => {
   const apex = normalizeApexDomain(domain);
+  if (apex && KNOWN_FAVICONS[apex]) {
+    return KNOWN_FAVICONS[apex];
+  }
   if (!apex || apex === 'unknown' || apex === 'browser') {
-    return 'https://icons.duckduckgo.com/ip3/duckduckgo.com.ico';
+    return 'https://duckduckgo.com/favicon.ico';
   }
   return `https://icons.duckduckgo.com/ip3/${encodeURIComponent(apex)}.ico`;
 };
@@ -190,91 +212,142 @@ export const runStockAnalysis = async (ticker: string, companyName?: string): Pr
 
 export const webSearch = async (query: string, maxResults: number = 8): Promise<ToolResult> => {
   const sources: SourceRef[] = [];
+  const tavilyKey = API_CONFIG.TAVILY_API_KEY || (typeof window !== 'undefined' ? (window as any)._ENV_?.VITE_TAVILY_API_KEY : '');
 
-  // Try Tavily first if key available
-  if (API_CONFIG.TAVILY_API_KEY) {
-    try {
-      const res = await fetchT('/api/tavily/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, max_results: maxResults, search_depth: 'advanced', include_domains: [] })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const results = (data.results || []).map((r: any) => ({
-          title: r.title, url: r.url, snippet: r.content?.substring(0, 300) || ''
-        }));
+  // 1. Tavily Search (Direct + server proxy with key injection)
+  try {
+    const res = await fetchT('/api/tavily/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(tavilyKey ? { 'Authorization': `Bearer ${tavilyKey}` } : {})
+      },
+      body: JSON.stringify({
+        query,
+        max_results: maxResults,
+        search_depth: 'advanced',
+        include_domains: [],
+        ...(tavilyKey ? { api_key: tavilyKey } : {})
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const results = (data.results || []).map((r: any) => ({
+        title: r.title,
+        url: r.url,
+        snippet: r.content?.substring(0, 300) || ''
+      }));
+      if (results.length > 0) {
         sources.push(toSourceRef('tavily.com', 'Tavily Search', undefined, 'web'));
         return { success: true, data: results, summary: `Tavily: ${results.length} results for "${query}"`, sources };
       }
-    } catch {}
+    }
+  } catch (err: any) {
+    console.warn('[WebSearch] Tavily failed, trying fallbacks:', err.message);
   }
 
-  // Try Brave Search API if key available
+  // 2. Brave Search API if key available
   if (API_CONFIG.BRAVE_API_KEY) {
     try {
       const res = await fetchT('/api/brave/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_CONFIG.BRAVE_API_KEY}`
+        },
         body: JSON.stringify({ q: query, count: maxResults, search_lang: 'en' })
       });
       if (res.ok) {
         const data = await res.json();
         const results = (data.web?.results || []).map((r: any) => ({
-          title: r.title, url: r.url, snippet: r.description?.substring(0, 300) || ''
+          title: r.title,
+          url: r.url,
+          snippet: r.description?.substring(0, 300) || ''
         }));
-        sources.push(toSourceRef('brave.com', 'Brave Search', undefined, 'web'));
-        return { success: true, data: results, summary: `Brave: ${results.length} results for "${query}"`, sources };
+        if (results.length > 0) {
+          sources.push(toSourceRef('brave.com', 'Brave Search', undefined, 'web'));
+          return { success: true, data: results, summary: `Brave: ${results.length} results for "${query}"`, sources };
+        }
       }
-    } catch {}
+    } catch (err: any) {
+      console.warn('[WebSearch] Brave failed:', err.message);
+    }
   }
 
-  // Fallback: DuckDuckGo via proxy with better headers
+  // 3. Google News RSS search (Reliable, never blocked, returns top financial & market news)
+  try {
+    const rssUrl = `/api/googlenews/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
+    const res = await fetchT(rssUrl, {
+      headers: { 'Accept': 'application/xml, text/xml, */*' }
+    });
+    if (res.ok) {
+      const xml = await res.text();
+      const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)];
+      if (items.length > 0) {
+        const results = items.slice(0, maxResults).map(it => {
+          const rawTitle = it[1].match(/<title>([\s\S]*?)<\/title>/)?.[1] || '';
+          const rawLink = it[1].match(/<link>([\s\S]*?)<\/link>/)?.[1] || '';
+          const rawDesc = it[1].match(/<description>([\s\S]*?)<\/description>/)?.[1] || '';
+          const title = rawTitle.replace(/&amp;/g, '&').replace(/<[^>]+>/g, '').trim();
+          const snippet = rawDesc.replace(/&amp;/g, '&').replace(/<[^>]+>/g, '').trim();
+          return { title, url: rawLink, snippet: snippet.substring(0, 300) };
+        });
+        sources.push(toSourceRef('news.google.com', 'Google News Search', undefined, 'web'));
+        return { success: true, data: results, summary: `Web/News: ${results.length} results for "${query}"`, sources };
+      }
+    }
+  } catch (err: any) {
+    console.warn('[WebSearch] Google News RSS fallback failed:', err.message);
+  }
+
+  // 4. DuckDuckGo HTML search
   try {
     const url = `/api/ddg/html/?q=${encodeURIComponent(query)}`;
-    const res = await fetchT(url, { 
-      headers: { 
+    const res = await fetchT(url, {
+      headers: {
         'Accept': 'text/html',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
-      } 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      }
     });
-    if (!res.ok) throw new Error(`Search failed (${res.status})`);
-    const html = await res.text();
+    if (res.ok) {
+      const html = await res.text();
+      const results: { title: string; url: string; snippet: string }[] = [];
+      const linkRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+      const snippetRegex = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
 
-    const results: { title: string; url: string; snippet: string }[] = [];
-    const linkRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-    const snippetRegex = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+      const links: { href: string; title: string }[] = [];
+      let m;
+      while ((m = linkRegex.exec(html)) !== null) {
+        links.push({ href: m[1], title: m[2].replace(/<[^>]+>/g, '').trim() });
+      }
+      const snippets: string[] = [];
+      while ((m = snippetRegex.exec(html)) !== null) {
+        snippets.push(m[1].replace(/<[^>]+>/g, '').trim());
+      }
 
-    const links: { href: string; title: string }[] = [];
-    let m;
-    while ((m = linkRegex.exec(html)) !== null) {
-      links.push({ href: m[1], title: m[2].replace(/<[^>]+>/g, '').trim() });
+      for (let i = 0; i < Math.min(links.length, maxResults); i++) {
+        let href = links[i].href;
+        const uddgMatch = href.match(/uddg=([^&]+)/);
+        if (uddgMatch) href = decodeURIComponent(uddgMatch[1]);
+        if (!href.startsWith('http')) continue;
+        results.push({ title: links[i].title, url: href, snippet: snippets[i] || '' });
+      }
+
+      if (results.length > 0) {
+        sources.push(toSourceRef('duckduckgo.com', 'DuckDuckGo', undefined, 'web'));
+        return { success: true, data: results, summary: `DuckDuckGo: ${results.length} results for "${query}"`, sources };
+      }
     }
-    const snippets: string[] = [];
-    while ((m = snippetRegex.exec(html)) !== null) {
-      snippets.push(m[1].replace(/<[^>]+>/g, '').trim());
-    }
-
-    for (let i = 0; i < Math.min(links.length, maxResults); i++) {
-      let href = links[i].href;
-      const uddgMatch = href.match(/uddg=([^&]+)/);
-      if (uddgMatch) href = decodeURIComponent(uddgMatch[1]);
-      if (!href.startsWith('http')) continue;
-      results.push({ title: links[i].title, url: href, snippet: snippets[i] || '' });
-    }
-
-    sources.push(toSourceRef('duckduckgo.com', 'DuckDuckGo', undefined, 'web'));
-    return { success: true, data: results, summary: `DDG: ${results.length} results for "${query}"`, sources };
-  } catch (e: any) {
-    // Final fallback: return a mock result with a helpful message
-    return { 
-      success: false, 
-      data: [], 
-      summary: `Web search unavailable (Tavily/DDG blocked). Please configure TAVILY_API_KEY or BRAVE_API_KEY in .env for web search. Error: ${e.message}`, 
-      sources 
-    };
+  } catch (err: any) {
+    console.warn('[WebSearch] DuckDuckGo failed:', err.message);
   }
+
+  return {
+    success: false,
+    data: [],
+    summary: `Web search temporarily unavailable for "${query}". Please try rephrasing or search directly.`,
+    sources
+  };
 };
 
 // ─── TOOL 3: READ FULL WEBPAGE (Jina AI Reader) ───
@@ -594,19 +667,154 @@ export const getFNOChain = async (ticker: string): Promise<ToolResult> => {
 
 // ─── TOOL 5: MUTUAL FUND DATA (mfapi.in) ───
 
+// Module-level cache for full schemes index
+let cachedMasterSchemes: any[] | null = null;
+let lastMasterFetchTime = 0;
+
+export const normalizeMFQuery = (input: string): string[] => {
+  const q = input.trim();
+  const list = [q];
+  let norm = q.toLowerCase()
+    .replace(/\bpru\b/g, 'prudential')
+    .replace(/\bppfas\b/g, 'parag parikh')
+    .replace(/\babsl\b/g, 'aditya birla')
+    .replace(/\bbirla\b/g, 'aditya birla')
+    .replace(/\bmosl\b/g, 'motilal oswal')
+    .replace(/\bnippon\b/g, 'nippon india')
+    .replace(/\bidfc\b/g, 'bandhan')
+    .replace(/\bbest\b/g, '')
+    .replace(/\btop\b/g, '')
+    .replace(/\bmutual\b/g, '')
+    .replace(/\bfunds?\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  list.push(norm);
+
+  if (/small\s*cap/i.test(norm)) {
+    list.push(norm.replace(/small\s*cap/gi, 'smallcap'));
+    list.push(norm.replace(/small\s*cap/gi, 'small cap'));
+  }
+  if (/mid\s*cap/i.test(norm)) {
+    list.push(norm.replace(/mid\s*cap/gi, 'midcap'));
+    list.push(norm.replace(/mid\s*cap/gi, 'mid cap'));
+  }
+  if (/large\s*cap/i.test(norm)) {
+    list.push(norm.replace(/large\s*cap/gi, 'largecap'));
+    list.push(norm.replace(/large\s*cap/gi, 'large cap'));
+  }
+  if (/flexi\s*cap/i.test(norm)) {
+    list.push(norm.replace(/flexi\s*cap/gi, 'flexicap'));
+    list.push(norm.replace(/flexi\s*cap/gi, 'flexi cap'));
+  }
+
+  const words = norm.split(/\s+/).filter(w => w.length > 2);
+  if (words.length >= 2) {
+    list.push(words.join(' '));
+    if (words.length > 2) {
+      list.push(`${words[0]} ${words[words.length - 2]} ${words[words.length - 1]}`);
+      list.push(`${words[0]} ${words[words.length - 1]}`);
+    }
+  }
+
+  return [...new Set(list.filter(s => s && s.length > 1))];
+};
+
 export const getMutualFund = async (fundName: string): Promise<ToolResult> => {
   try {
-    const searchRes = await fetchT(`/api/mfapi/mf/search?q=${encodeURIComponent(fundName)}`);
-    if (!searchRes.ok) throw new Error(`MF search failed (${searchRes.status})`);
-    const schemes = await searchRes.json();
+    let schemes: any[] = [];
+    const searchQueries = normalizeMFQuery(fundName);
 
-    if (!Array.isArray(schemes) || schemes.length === 0) {
-      return { success: false, data: null, summary: `No mutual funds found matching "${fundName}"`, sources: [] };
+    // 1. Try search queries against the API
+    for (const q of searchQueries) {
+      try {
+        const searchRes = await fetchT(`/api/mfapi/mf/search?q=${encodeURIComponent(q)}`);
+        if (searchRes.ok) {
+          const results = await searchRes.json();
+          if (Array.isArray(results) && results.length > 0) {
+            schemes = results;
+            break;
+          }
+        }
+      } catch {}
     }
 
-    const top5 = schemes.slice(0, 5);
+    // 2. If direct search returned nothing, load master schemes index and do smart fuzzy/token match
+    if (!schemes || schemes.length === 0) {
+      try {
+        const now = Date.now();
+        if (!cachedMasterSchemes || now - lastMasterFetchTime > 3600000) {
+          const masterRes = await fetchT('/api/mfapi/mf', {}, 15000);
+          if (masterRes.ok) {
+            const masterData = await masterRes.json();
+            if (Array.isArray(masterData)) {
+              cachedMasterSchemes = masterData;
+              lastMasterFetchTime = now;
+            }
+          }
+        }
+
+        if (Array.isArray(cachedMasterSchemes) && cachedMasterSchemes.length > 0) {
+          const norm = fundName.toLowerCase()
+            .replace(/\bpru\b/g, 'prudential')
+            .replace(/\bppfas\b/g, 'parag parikh')
+            .replace(/\babsl\b/g, 'aditya birla')
+            .replace(/\bbirla\b/g, 'aditya birla')
+            .replace(/\bmosl\b/g, 'motilal oswal')
+            .replace(/\bnippon\b/g, 'nippon india')
+            .replace(/\bidfc\b/g, 'bandhan')
+            .replace(/\bbest\b/g, '')
+            .replace(/\btop\b/g, '')
+            .replace(/\bmutual\b/g, '')
+            .replace(/\bfunds?\b/g, '')
+            .trim();
+
+          const hasSmallCap = norm.includes('small cap') || norm.includes('smallcap');
+          const hasMidCap = norm.includes('mid cap') || norm.includes('midcap');
+          const hasFlexiCap = norm.includes('flexi cap') || norm.includes('flexicap');
+          const hasLargeCap = norm.includes('large cap') || norm.includes('largecap');
+
+          const keywords = norm.split(/\s+/).filter(k => k.length > 2);
+
+          schemes = cachedMasterSchemes.filter(s => {
+            const name = (s.schemeName || '').toLowerCase();
+            if (hasSmallCap && !(name.includes('small cap') || name.includes('smallcap'))) return false;
+            if (hasMidCap && !(name.includes('mid cap') || name.includes('midcap'))) return false;
+            if (hasFlexiCap && !(name.includes('flexi cap') || name.includes('flexicap'))) return false;
+            if (hasLargeCap && !(name.includes('large cap') || name.includes('largecap'))) return false;
+
+            return keywords.every(kw => {
+              if (kw === 'small' || kw === 'cap' || kw === 'smallcap') return true;
+              if (kw === 'mid' || kw === 'midcap') return true;
+              if (kw === 'flexi' || kw === 'flexicap') return true;
+              return name.includes(kw);
+            });
+          });
+        }
+      } catch (err: any) {
+        console.warn('[MF Smart Search master fallback]:', err.message);
+      }
+    }
+
+    if (!Array.isArray(schemes) || schemes.length === 0) {
+      return {
+        success: false,
+        data: null,
+        summary: `No mutual funds found matching "${fundName}". Try searching with AMC name (e.g., "ICICI Prudential", "Nippon", "SBI") or fund category (e.g., "small cap", "mid cap", "flexi cap").`,
+        sources: []
+      };
+    }
+
+    // Sort to prioritize Direct Plan - Growth (which 99% of investors prefer)
+    schemes.sort((a, b) => {
+      const aDirect = /direct/i.test(a.schemeName) && /growth/i.test(a.schemeName) ? 3 : /direct/i.test(a.schemeName) ? 2 : /growth/i.test(a.schemeName) ? 1 : 0;
+      const bDirect = /direct/i.test(b.schemeName) && /growth/i.test(b.schemeName) ? 3 : /direct/i.test(b.schemeName) ? 2 : /growth/i.test(b.schemeName) ? 1 : 0;
+      return bDirect - aDirect;
+    });
+
+    const topSchemes = schemes.slice(0, 5);
     const detailResults = await Promise.allSettled(
-      top5.map((s: any) => fetchT(`/api/mfapi/mf/${s.schemeCode}`).then(r => r.json()))
+      topSchemes.map((s: any) => fetchT(`/api/mfapi/mf/${s.schemeCode}`).then(r => r.json()))
     );
 
     const funds = detailResults
@@ -615,30 +823,49 @@ export const getMutualFund = async (fundName: string): Promise<ToolResult> => {
         const d = r.value;
         const navHistory = d?.data || [];
         const latestNav = navHistory[0]?.nav ? parseFloat(navHistory[0].nav) : null;
+        const now = navHistory[0]?.date ? new Date(navHistory[0].date.split('-').reverse().join('-')).getTime() : Date.now();
+
+        // 1 Year ago NAV (approx 365 days)
         const yearAgoNav = navHistory.find((h: any) => {
-          const daysDiff = (Date.now() - new Date(h.date.split('-').reverse().join('-')).getTime()) / 86400000;
-          return daysDiff > 360 && daysDiff < 380;
+          const daysDiff = (now - new Date(h.date.split('-').reverse().join('-')).getTime()) / 86400000;
+          return daysDiff >= 360 && daysDiff <= 380;
         })?.nav;
 
         const oneYearReturn = (latestNav && yearAgoNav)
           ? ((latestNav - parseFloat(yearAgoNav)) / parseFloat(yearAgoNav) * 100).toFixed(2)
           : null;
 
+        // 3 Year ago NAV (approx 1095 days) -> CAGR
+        const threeYearAgoNav = navHistory.find((h: any) => {
+          const daysDiff = (now - new Date(h.date.split('-').reverse().join('-')).getTime()) / 86400000;
+          return daysDiff >= 1080 && daysDiff <= 1120;
+        })?.nav;
+
+        const threeYearCAGR = (latestNav && threeYearAgoNav)
+          ? ((Math.pow(latestNav / parseFloat(threeYearAgoNav), 1 / 3) - 1) * 100).toFixed(2)
+          : null;
+
         return {
-          schemeCode: d?.meta?.scheme_code || top5[i]?.schemeCode,
-          schemeName: d?.meta?.scheme_name || top5[i]?.schemeName,
+          schemeCode: d?.meta?.scheme_code || topSchemes[i]?.schemeCode,
+          schemeName: d?.meta?.scheme_name || topSchemes[i]?.schemeName,
           fundHouse: d?.meta?.fund_house,
           category: d?.meta?.scheme_category,
           latestNAV: latestNav,
           asOfDate: navHistory[0]?.date,
-          oneYearReturnPercent: oneYearReturn
+          oneYearReturnPercent: oneYearReturn ? `${oneYearReturn}%` : 'N/A',
+          threeYearCAGRPercent: threeYearCAGR ? `${threeYearCAGR}%` : 'N/A'
         };
       });
+
+    const primary = funds[0];
+    const summaryText = primary
+      ? `Found ${funds.length} mutual funds for "${fundName}". Top: ${primary.schemeName} — NAV ₹${primary.latestNAV} (${primary.asOfDate}), 1Y Return: ${primary.oneYearReturnPercent}, 3Y CAGR: ${primary.threeYearCAGRPercent}`
+      : `Found ${schemes.length} schemes for "${fundName}".`;
 
     return {
       success: true,
       data: funds,
-      summary: `Found ${funds.length} mutual funds for "${fundName}". Top: ${funds[0]?.schemeName} — NAV ${funds[0]?.latestNAV}, 1Y return ${funds[0]?.oneYearReturnPercent ?? 'N/A'}%`,
+      summary: summaryText,
       sources: [toSourceRef('mfapi.in', 'MF API India', 'https://www.mfapi.in', 'api')]
     };
   } catch (e: any) {
