@@ -5,7 +5,8 @@ import {
   Mail, 
   ShieldCheck, 
   Globe2, 
-  ChevronUp
+  ChevronUp,
+  X
 } from 'lucide-react';
 import { ContactModal } from './ContactModal';
 
@@ -15,11 +16,10 @@ interface DataSourceItem {
   category: 'Equities & Derivatives' | 'Mutual Funds' | 'News & Sentiment' | 'AI & Execution';
   url: string;
   role: string;
-  status: 'Live API' | 'Official Exchange' | 'Real-time Feed' | 'WASM Runtime';
+  status: string;
 }
 
 const DATA_SOURCES: DataSourceItem[] = [
-  // Equities & Derivatives
   {
     name: 'NSE India',
     category: 'Equities & Derivatives',
@@ -55,8 +55,6 @@ const DATA_SOURCES: DataSourceItem[] = [
     role: 'End-of-day market tick histories and institutional closing price feeds.',
     status: 'Live API'
   },
-
-  // Mutual Funds
   {
     name: 'MF API (AMFI)',
     category: 'Mutual Funds',
@@ -64,8 +62,6 @@ const DATA_SOURCES: DataSourceItem[] = [
     role: 'All 38,000+ Indian mutual fund schemes: historical NAV, 1Y returns, and 3Y CAGRs.',
     status: 'Live API'
   },
-
-  // News & Sentiment
   {
     name: 'Google News',
     category: 'News & Sentiment',
@@ -94,8 +90,6 @@ const DATA_SOURCES: DataSourceItem[] = [
     role: 'Autonomous real-time search engine for AI agents and market investigations.',
     status: 'Live API'
   },
-
-  // AI & Execution
   {
     name: 'TradingView',
     category: 'AI & Execution',
@@ -122,8 +116,7 @@ const DATA_SOURCES: DataSourceItem[] = [
 export const Footer: React.FC = () => {
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [contactSubject, setContactSubject] = useState('');
-  const [showAllSources, setShowAllSources] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [isSourcesModalOpen, setIsSourcesModalOpen] = useState(false);
 
   const openContact = (subject: string = 'General Inquiry') => {
     setContactSubject(subject);
@@ -134,90 +127,87 @@ export const Footer: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const categories = ['All', 'Equities & Derivatives', 'Mutual Funds', 'News & Sentiment', 'AI & Execution'];
-
-  const filteredSources = selectedCategory === 'All' 
-    ? DATA_SOURCES 
-    : DATA_SOURCES.filter(s => s.category === selectedCategory);
-
   return (
     <>
-      <footer className="relative bg-[#020307] text-white overflow-hidden pt-24 pb-12 border-t border-white/[0.08]">
-        {/* ── ATMOSPHERIC AURORA TOP MESH (Inspired by AIUC artwork) ── */}
-        <div className="absolute top-0 left-0 right-0 h-96 pointer-events-none overflow-hidden">
-          {/* Main Top Deep Indigo Aurora Gradient */}
+      <footer className="relative bg-[#050505] text-white overflow-hidden pt-16 pb-8 border-t border-white/[0.08]">
+        {/* ── ATMOSPHERIC 3-COLOR TEXTURED BLUR (Black, White & Gold #C4A77D) ── */}
+        <div className="absolute top-0 left-0 right-0 h-80 pointer-events-none overflow-hidden">
+          {/* Top Champagne Gold Aurora Glow */}
           <div 
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-[140%] h-[120%] opacity-85 blur-3xl pointer-events-none"
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-[130%] h-[120%] opacity-40 blur-3xl pointer-events-none"
             style={{
-              background: 'radial-gradient(ellipse 70% 50% at 50% 0%, rgba(37, 99, 235, 0.45) 0%, rgba(30, 58, 138, 0.3) 30%, rgba(15, 23, 42, 0.2) 60%, transparent 80%)'
+              background: 'radial-gradient(ellipse 70% 50% at 50% 0%, rgba(196, 167, 125, 0.32) 0%, rgba(196, 167, 125, 0.12) 35%, rgba(10, 10, 10, 0.5) 70%, transparent 85%)'
             }}
           />
-          {/* Subtle cyan accent glow at center-top */}
+          {/* Soft White/Gold top focus spot */}
           <div 
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-48 opacity-60 blur-2xl pointer-events-none"
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-[50%] h-36 opacity-30 blur-2xl pointer-events-none"
             style={{
-              background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(56, 189, 248, 0.35) 0%, rgba(99, 102, 241, 0.2) 40%, transparent 70%)'
+              background: 'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(255, 255, 255, 0.15) 0%, rgba(196, 167, 125, 0.18) 40%, transparent 70%)'
             }}
           />
           {/* Top Edge Hairline Glow */}
-          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-cyan-400/40 via-blue-500/50 to-transparent" />
+          <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#C4A77D]/50 to-transparent" />
         </div>
 
+        {/* Textured Noise Filter Overlay */}
+        <div 
+          className="absolute inset-0 opacity-[0.035] pointer-events-none mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`
+          }}
+        />
+
         <div className="max-w-7xl mx-auto px-6 relative z-10">
-          {/* ── ROW 1: TAGLINE & DIRECT LINKS BAR ── */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-12 border-b border-white/[0.08]">
+          {/* ── ROW 1: TAGLINE & DIRECT ACTION BAR ── */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-8 border-b border-white/[0.08]">
             <div>
-              <span className="text-xs font-mono uppercase tracking-[0.25em] text-white/50 block mb-1">
+              <span className="text-xs font-mono uppercase tracking-[0.25em] text-white/50 block mb-0.5">
                 Move with confidence
               </span>
-              <p className="text-sm text-white/70 font-sans tracking-wide">
-                Autonomous Quantitative Sentiment & Financial Intelligence Protocol
+              <p className="text-xs text-white/70 font-sans tracking-wide">
+                Autonomous Financial Sentiment & Quantitative Analytics Protocol
               </p>
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                13 Data Feeds Live
-              </span>
+              <button
+                type="button"
+                onClick={() => setIsSourcesModalOpen(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 hover:border-[#C4A77D]/40 text-xs font-mono text-white/80 hover:text-white transition-all backdrop-blur-md"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-[#C4A77D]" />
+                <span>Sources (13 Direct)</span>
+                <ArrowUpRight className="w-3 h-3 text-white/40" />
+              </button>
 
               <button
                 type="button"
                 onClick={() => openContact('General Inquiry')}
-                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 hover:border-blue-400 text-xs font-mono text-blue-300 hover:text-white transition-all shadow-lg shadow-blue-500/10"
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#C4A77D]/15 hover:bg-[#C4A77D]/25 border border-[#C4A77D]/40 text-xs font-mono text-[#C4A77D] hover:text-white transition-all shadow-lg shadow-[#C4A77D]/10 backdrop-blur-md"
               >
-                <Mail className="w-3.5 h-3.5 text-blue-400" />
+                <Mail className="w-3.5 h-3.5 text-[#C4A77D]" />
                 <span>Contact Us</span>
               </button>
-
-              <a
-                href="https://www.stocksentimentai.app"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 text-xs font-mono text-white/60 hover:text-white transition-all"
-              >
-                <span>STOCKSENTIMENTAI.APP</span>
-                <ArrowUpRight className="w-3 h-3 text-white/40" />
-              </a>
             </div>
           </div>
 
-          {/* ── ROW 2: GRAND TYPOGRAPHIC CENTERPIECE (AIUC Inspired) ── */}
-          <div className="py-16 grid grid-cols-1 lg:grid-cols-12 gap-10 items-end">
+          {/* ── ROW 2: GRAND TYPOGRAPHIC CENTERPIECE (AIUC Inspired, 1-Page Height) ── */}
+          <div className="py-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
             <div className="lg:col-span-8">
               {/* Giant Serif Display Logo */}
               <div className="relative inline-block select-none">
                 <h1 
                   className="font-serif text-white tracking-tight leading-none"
                   style={{
-                    fontSize: 'clamp(3.5rem, 9.5vw, 7.8rem)',
+                    fontSize: 'clamp(3.2rem, 8.5vw, 6.8rem)',
                     fontFamily: "'Playfair Display', Georgia, serif",
                     letterSpacing: '-0.03em'
                   }}
                 >
-                  SENTIMENT<span className="text-blue-400">AI</span>
+                  SENTIMENT<span className="text-[#C4A77D]">AI</span>
                   <sup 
-                    className="text-white/60 font-sans ml-1 text-2xl md:text-4xl align-super inline-block -translate-y-2"
+                    className="text-white/60 font-sans ml-1 text-2xl md:text-3xl align-super inline-block -translate-y-2"
                     style={{ fontSize: '0.35em' }}
                   >
                     ©
@@ -225,255 +215,94 @@ export const Footer: React.FC = () => {
                 </h1>
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-mono text-white/50 tracking-wider">
-                <span>NSE / BSE EQUITY</span>
-                <span className="text-white/20">•</span>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] font-mono text-white/50 tracking-wider">
+                <span>NSE & BSE EQUITIES</span>
+                <span className="text-[#C4A77D]/40">•</span>
                 <span>F&O DERIVATIVES</span>
-                <span className="text-white/20">•</span>
+                <span className="text-[#C4A77D]/40">•</span>
                 <span>38K+ MUTUAL FUNDS</span>
-                <span className="text-white/20">•</span>
-                <span>NVIDIA NEMOTRON 3</span>
+                <span className="text-[#C4A77D]/40">•</span>
+                <span>QUANT INTELLIGENCE</span>
               </div>
             </div>
 
-            {/* Circular Insignia & Descriptor Badge */}
+            {/* Circular Insignia Badge */}
             <div className="lg:col-span-4 flex items-center lg:justify-end">
-              <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-sm max-w-sm">
-                <div className="w-12 h-12 rounded-full border border-blue-500/40 bg-blue-500/10 flex items-center justify-center shrink-0 text-blue-400">
-                  <Globe2 className="w-6 h-6 animate-[spin_20s_linear_infinite]" />
+              <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-md max-w-xs">
+                <div className="w-10 h-10 rounded-full border border-[#C4A77D]/40 bg-[#C4A77D]/10 flex items-center justify-center shrink-0 text-[#C4A77D]">
+                  <Globe2 className="w-5 h-5 animate-[spin_20s_linear_infinite]" />
                 </div>
                 <div>
-                  <div className="text-xs font-mono uppercase tracking-widest text-white/80 font-semibold">
+                  <div className="text-[11px] font-mono uppercase tracking-widest text-white/90 font-semibold">
                     SentimentAI Protocol
                   </div>
-                  <div className="text-[11px] text-white/45 leading-relaxed mt-0.5">
-                    Quantitative Financial Underwriting & Multi-Agent Intelligence Architecture
+                  <div className="text-[10px] text-white/45 leading-relaxed mt-0.5">
+                    Quantitative Financial Underwriting & Multi-Agent Intelligence Engine
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* ── ROW 3: LIST OF SOURCES (FULL TRANSPARENCY & DIRECT LINKS) ── */}
-          <div className="py-12 border-t border-white/[0.08]">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-              <div>
-                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-mono uppercase tracking-wider mb-2">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Full Transparency Manifesto</span>
-                </div>
-                <h3 className="text-2xl font-display font-semibold text-white tracking-tight">
-                  Data Sources & Integration Directory
-                </h3>
-                <p className="text-sm text-white/50 max-w-2xl mt-1">
-                  We believe in 100% data auditability. Below is the verified list of direct external data feeds, official exchanges, and execution engines powering SentimentAI.
-                </p>
-              </div>
-
-              {/* Filter Pills */}
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
-                      selectedCategory === cat
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 font-medium'
-                        : 'bg-white/[0.03] hover:bg-white/[0.08] text-white/50 hover:text-white border border-white/[0.06]'
-                    }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
+          {/* ── ROW 3: COMPACT SOURCES DIRECTORY STRIP ── */}
+          <div className="py-4 px-4 rounded-xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-md flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+            <div className="flex items-center gap-2 text-white/60">
+              <ShieldCheck className="w-4 h-4 text-[#C4A77D]" />
+              <span className="text-white font-medium">Transparency:</span>
+              <span className="text-white/40 hidden sm:inline">Direct links to all data providers:</span>
             </div>
 
-            {/* Sources Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {(showAllSources ? filteredSources : filteredSources.slice(0, 6)).map((source) => (
+            <div className="flex items-center gap-2 flex-wrap">
+              {[
+                { name: 'NSE', url: 'https://www.nseindia.com' },
+                { name: 'BSE', url: 'https://www.bseindia.com' },
+                { name: 'Yahoo Finance', url: 'https://finance.yahoo.com' },
+                { name: 'AMFI (MF)', url: 'https://www.mfapi.in' },
+                { name: 'TradingView', url: 'https://www.tradingview.com' },
+                { name: 'IndianAPI', url: 'https://stock.indianapi.in' },
+                { name: 'NVIDIA NIM', url: 'https://build.nvidia.com' },
+                { name: 'Pyodide', url: 'https://pyodide.org' }
+              ].map(s => (
                 <a
-                  key={source.name}
-                  href={source.url}
+                  key={s.name}
+                  href={s.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group relative p-4 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] border border-white/[0.07] hover:border-blue-500/40 transition-all duration-200 flex flex-col justify-between"
+                  className="px-2.5 py-1 rounded-md bg-white/[0.03] hover:bg-[#C4A77D]/15 hover:text-[#C4A77D] text-white/70 border border-white/[0.06] hover:border-[#C4A77D]/30 transition-all inline-flex items-center gap-1 text-[11px]"
                 >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.05] text-white/60 border border-white/[0.05]">
-                        {source.category}
-                      </span>
-                      <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                        {source.status}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-display font-semibold text-white text-base group-hover:text-blue-400 transition-colors flex items-center gap-1.5">
-                        <span>{source.name}</span>
-                        <ExternalLink className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-blue-400" />
-                      </h4>
-                    </div>
-
-                    <p className="text-xs text-white/50 mt-1.5 line-clamp-2 leading-relaxed">
-                      {source.role}
-                    </p>
-                  </div>
-
-                  <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-white/40 group-hover:text-blue-300 transition-colors">
-                    <span className="truncate max-w-[220px]">{source.url.replace(/^https?:\/\//, '')}</span>
-                    <ArrowUpRight className="w-3.5 h-3.5 shrink-0" />
-                  </div>
+                  <span>{s.name}</span>
+                  <ExternalLink className="w-2.5 h-2.5 opacity-50" />
                 </a>
               ))}
-            </div>
 
-            {/* Show More / Show Less Toggle */}
-            {filteredSources.length > 6 && (
-              <div className="mt-6 text-center">
-                <button
-                  type="button"
-                  onClick={() => setShowAllSources(!showAllSources)}
-                  className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/10 text-xs font-mono text-white/70 hover:text-white transition-all"
-                >
-                  <span>{showAllSources ? 'Show Less Sources' : `View All ${filteredSources.length} Direct Sources`}</span>
-                  <ArrowUpRight className={`w-3.5 h-3.5 transition-transform ${showAllSources ? 'rotate-180' : ''}`} />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* ── ROW 4: PLATFORM NAVIGATION COLUMNS ── */}
-          <div className="py-12 border-t border-white/[0.08] grid grid-cols-2 md:grid-cols-4 gap-8">
-            {/* Column 1: Platform */}
-            <div>
-              <h5 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/40 mb-4 font-semibold">
-                Platform
-              </h5>
-              <ul className="space-y-2.5 text-xs font-mono">
-                <li><a href="#analysis" className="text-white/60 hover:text-blue-400 transition-colors">Equity Radar & Analysis</a></li>
-                <li><a href="#fno" className="text-white/60 hover:text-blue-400 transition-colors">F&O Options Chain Engine</a></li>
-                <li><a href="#mf" className="text-white/60 hover:text-blue-400 transition-colors">Mutual Fund Screener (38K)</a></li>
-                <li><a href="#terminal" className="text-white/60 hover:text-blue-400 transition-colors">Devil's Advocate Terminal</a></li>
-                <li><a href="#backtest" className="text-white/60 hover:text-blue-400 transition-colors">Quantitative Backtester</a></li>
-              </ul>
-            </div>
-
-            {/* Column 2: Architecture */}
-            <div>
-              <h5 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/40 mb-4 font-semibold">
-                Architecture
-              </h5>
-              <ul className="space-y-2.5 text-xs font-mono">
-                <li><span className="text-white/60">NVIDIA Nemotron 3 Ultra 550B</span></li>
-                <li><span className="text-white/60">WASM Pyodide Python Kernel</span></li>
-                <li><span className="text-white/60">Multi-Agent Orchestrator</span></li>
-                <li><span className="text-white/60">Real-time Scraping Engine</span></li>
-                <li><span className="text-white/60">FinBERT Sentiment Ensembles</span></li>
-              </ul>
-            </div>
-
-            {/* Column 3: Transparency */}
-            <div>
-              <h5 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/40 mb-4 font-semibold">
-                Transparency
-              </h5>
-              <ul className="space-y-2.5 text-xs font-mono">
-                <li>
-                  <a 
-                    href="https://www.mfapi.in" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-white/60 hover:text-blue-400 transition-colors flex items-center gap-1"
-                  >
-                    <span>AMFI India Data</span>
-                    <ArrowUpRight className="w-3 h-3 text-white/30" />
-                  </a>
-                </li>
-                <li>
-                  <a 
-                    href="https://www.nseindia.com" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-white/60 hover:text-blue-400 transition-colors flex items-center gap-1"
-                  >
-                    <span>NSE India Exchange</span>
-                    <ArrowUpRight className="w-3 h-3 text-white/30" />
-                  </a>
-                </li>
-                <li>
-                  <a 
-                    href="https://www.tradingview.com" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-white/60 hover:text-blue-400 transition-colors flex items-center gap-1"
-                  >
-                    <span>TradingView Ratings</span>
-                    <ArrowUpRight className="w-3 h-3 text-white/30" />
-                  </a>
-                </li>
-                <li>
-                  <a 
-                    href="https://finance.yahoo.com" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-white/60 hover:text-blue-400 transition-colors flex items-center gap-1"
-                  >
-                    <span>Yahoo Finance Data</span>
-                    <ArrowUpRight className="w-3 h-3 text-white/30" />
-                  </a>
-                </li>
-              </ul>
-            </div>
-
-            {/* Column 4: Contact & Creator */}
-            <div>
-              <h5 className="text-[11px] font-mono uppercase tracking-[0.2em] text-white/40 mb-4 font-semibold">
-                Contact & Developer
-              </h5>
-              <div className="space-y-3">
-                <p className="text-xs text-white/60 leading-relaxed font-sans">
-                  Have inquiries, feedback, or custom institutional integrations?
-                </p>
-                <button
-                  type="button"
-                  onClick={() => openContact('Institutional Integration')}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-medium text-xs font-mono tracking-wider transition-all shadow-md shadow-blue-500/20"
-                >
-                  <Mail className="w-3.5 h-3.5" />
-                  <span>Contact Us</span>
-                </button>
-                <div className="pt-1">
-                  <a 
-                    href="mailto:devanshmehrotra2190@gmail.com" 
-                    className="text-[11px] font-mono text-blue-400 hover:text-blue-300 break-all block"
-                  >
-                    devanshmehrotra2190@gmail.com
-                  </a>
-                </div>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsSourcesModalOpen(true)}
+                className="text-[11px] text-[#C4A77D] hover:underline px-2 py-1 font-semibold"
+              >
+                +5 more
+              </button>
             </div>
           </div>
 
-          {/* ── ROW 5: BOTTOM ATTRIBUTION & COPYRIGHT (Made by Devansh Mehrotra) ── */}
-          <div className="pt-8 border-t border-white/[0.08] flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-white/40">
+          {/* ── ROW 4: BOTTOM ATTRIBUTION & COPYRIGHT (Made by Devansh Mehrotra) ── */}
+          <div className="mt-8 pt-6 border-t border-white/[0.08] flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-mono text-white/40">
             <div>
               <span>&copy; {new Date().getFullYear()} SentimentAI Protocol. All rights reserved.</span>
               <span className="block text-[11px] text-white/30 mt-0.5">
-                AI-generated intelligence. Not financial advice. Investments in securities are subject to market risks.
+                AI-generated market analytics. Not financial advice. Investments are subject to market risks.
               </span>
             </div>
 
-            {/* PROMINENT ATTRIBUTION: Made by Devansh Mehrotra */}
-            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/[0.03] border border-white/10 hover:border-blue-500/40 text-white/80 hover:text-white transition-all shadow-sm">
+            {/* PROMINENT ATTRIBUTION: Made by Devansh Mehrotra (Email is NOT revealed) */}
+            <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/[0.03] border border-white/10 hover:border-[#C4A77D]/40 text-white/80 hover:text-white transition-all backdrop-blur-md">
               <span className="text-white/50">Made by</span>
               <span className="font-semibold text-white tracking-wide">Devansh Mehrotra</span>
               <button
                 type="button"
                 onClick={() => openContact('Note for Devansh')}
-                className="ml-1 text-blue-400 hover:text-blue-300"
-                title="Send Devansh a message"
+                className="ml-1 text-[#C4A77D] hover:text-[#d4c4a8]"
+                title="Send a message to Devansh"
               >
                 <Mail className="w-3.5 h-3.5 inline" />
               </button>
@@ -488,12 +317,94 @@ export const Footer: React.FC = () => {
                 title="Back to Top"
               >
                 <span>Back to top</span>
-                <ChevronUp className="w-3.5 h-3.5" />
+                <ChevronUp className="w-3.5 h-3.5 text-[#C4A77D]" />
               </button>
             </div>
           </div>
         </div>
       </footer>
+
+      {/* ── SOURCES TRANSPARENCY MODAL (Shows all 13 sources without making footer long) ── */}
+      {isSourcesModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-fade-in">
+          <div 
+            className="relative w-full max-w-3xl max-h-[85vh] bg-[#070707] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Top gold bar */}
+            <div className="h-1 bg-gradient-to-r from-transparent via-[#C4A77D] to-transparent shrink-0" />
+
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-white/[0.08] shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#C4A77D]/10 border border-[#C4A77D]/30 flex items-center justify-center text-[#C4A77D]">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-display text-lg font-semibold tracking-wide text-white">
+                    Data Sources & Transparency Directory
+                  </h3>
+                  <p className="text-xs text-white/50 font-mono">
+                    All 13 verified direct data sources, exchanges & execution layers
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSourcesModalOpen(false)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content List */}
+            <div className="p-6 overflow-y-auto space-y-3 custom-scrollbar">
+              {DATA_SOURCES.map((source) => (
+                <div
+                  key={source.name}
+                  className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:border-[#C4A77D]/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-display font-semibold text-white text-sm">
+                        {source.name}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.05] text-[#C4A77D] border border-[#C4A77D]/20">
+                        {source.category}
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/50 leading-relaxed max-w-xl">
+                      {source.role}
+                    </p>
+                  </div>
+
+                  <a
+                    href={source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] hover:bg-[#C4A77D]/20 text-[#C4A77D] hover:text-white border border-white/[0.08] hover:border-[#C4A77D]/40 text-xs font-mono transition-all shrink-0 self-start sm:self-center"
+                  >
+                    <span>Visit Source</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              ))}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-white/[0.08] bg-black/40 flex items-center justify-between text-xs font-mono text-white/40 shrink-0">
+              <span>Verified Data Integrity Protocol</span>
+              <button
+                type="button"
+                onClick={() => setIsSourcesModalOpen(false)}
+                className="px-4 py-1.5 rounded-lg bg-[#C4A77D] text-black font-semibold text-xs hover:bg-[#d4c4a8] transition-all"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Contact Us Modal Window */}
       <ContactModal
