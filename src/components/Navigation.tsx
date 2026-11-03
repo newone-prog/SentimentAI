@@ -33,6 +33,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   const [scrolled, setScrolled] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileNav, setShowMobileNav] = useState(false);
+  const [isOverFooter, setIsOverFooter] = useState(false);
   const desktopUserMenuRef = useRef<HTMLDivElement>(null);
   const mobileUserMenuRef = useRef<HTMLDivElement>(null);
 
@@ -40,8 +41,28 @@ export const Navigation: React.FC<NavigationProps> = ({
     const handleScroll = () => {
       setScrolled(window.scrollY > 100);
     };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+
+    // Use IntersectionObserver for 100% reliable footer detection
+    const footer = document.getElementById('site-footer');
+    let observer: IntersectionObserver | null = null;
+    if (footer) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          // When footer takes over the viewport
+          setIsOverFooter(entry.isIntersecting && entry.boundingClientRect.top < window.innerHeight * 0.4);
+        },
+        { threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0] }
+      );
+      observer.observe(footer);
+    }
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (observer) observer.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -68,7 +89,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   return (
     <>
-      <nav className={`nav-fixed ${scrolled || view === 'terminal' ? 'nav-scrolled' : ''}`}>
+      <nav className={`nav-fixed ${scrolled || view === 'terminal' ? 'nav-scrolled' : ''} ${isOverFooter ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'} transition-all duration-300`}>
         <div className="nav-logo flex items-center gap-2 cursor-pointer" onClick={() => setView('main')}>
           <Sparkles className="w-5 h-5 text-[#C4A77D]" />
           SentimentAI
